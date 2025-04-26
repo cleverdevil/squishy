@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Profile - Squishy{% endblock %}
+
+{% block content %}
+<div class="profile-form">
+    <h1>Edit Profile: {{ profile.name }}</h1>
+    
+    <form method="post">
+        <div class="form-group">
+            <label for="resolution">Resolution</label>
+            <select id="resolution" name="resolution" required>
+                <option value="3840x2160" {% if profile.resolution == "3840x2160" %}selected{% endif %}>4K (3840x2160)</option>
+                <option value="1920x1080" {% if profile.resolution == "1920x1080" %}selected{% endif %}>1080p (1920x1080)</option>
+                <option value="1280x720" {% if profile.resolution == "1280x720" %}selected{% endif %}>720p (1280x720)</option>
+                <option value="854x480" {% if profile.resolution == "854x480" %}selected{% endif %}>480p (854x480)</option>
+                <option value="640x360" {% if profile.resolution == "640x360" %}selected{% endif %}>360p (640x360)</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="codec">Codec</label>
+            <select id="codec" name="codec" required>
+                <option value="h264" {% if profile.codec == "h264" %}selected{% endif %}>H.264 (AVC)</option>
+                <option value="hevc" {% if profile.codec == "hevc" %}selected{% endif %}>H.265 (HEVC)</option>
+                <option value="av1" {% if profile.codec == "av1" %}selected{% endif %}>AV1</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="container">Container</label>
+            <select id="container" name="container" required>
+                <option value="mkv" {% if profile.container == "mkv" %}selected{% endif %}>MKV</option>
+                <option value="mp4" {% if profile.container == "mp4" %}selected{% endif %}>MP4</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="quality">Quality</label>
+            <select id="quality" name="quality" required>
+                <option value="high" {% if profile.quality == "high" %}selected{% endif %}>High</option>
+                <option value="medium" {% if profile.quality == "medium" %}selected{% endif %}>Medium</option>
+                <option value="low" {% if profile.quality == "low" %}selected{% endif %}>Low</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="bitrate">Bitrate (optional)</label>
+            <input type="text" id="bitrate" name="bitrate" value="{{ profile.bitrate or '' }}" placeholder="e.g. 5M">
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit">Update Profile</button>
+            <a href="{{ url_for('admin.list_profiles') }}" class="button secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

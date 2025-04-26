@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - Squishy{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h1>Admin Dashboard</h1>
+    
+    <div class="admin-section">
+        <h2>Media Source Configuration</h2>
+        <div class="card">
+            <form action="{{ url_for('admin.update_source') }}" method="post" id="sourceForm">
+                <div class="form-group">
+                    <label>Select Media Source:</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="source" value="filesystem" {% if not config.jellyfin_url and not config.plex_url %}checked{% endif %} required onclick="toggleSourceFields()"> Filesystem Only</label>
+                        <label><input type="radio" name="source" value="jellyfin" {% if config.jellyfin_url %}checked{% endif %} onclick="toggleSourceFields()"> Jellyfin</label>
+                        <label><input type="radio" name="source" value="plex" {% if config.plex_url %}checked{% endif %} onclick="toggleSourceFields()"> Plex</label>
+                    </div>
+                </div>
+
+                <div id="filesystemFields" class="source-fields" {% if config.jellyfin_url or config.plex_url %}style="display:none"{% endif %}>
+                    <h3>Media Path</h3>
+                    <p>Your media is located at: <strong>{{ config.media_path }}</strong></p>
+                    <p>You can edit this path in the <a href="#path-config">Path Configuration</a> section below.</p>
+                </div>
+                
+                <div id="jellyfinFields" class="source-fields" {% if not config.jellyfin_url %}style="display:none"{% endif %}>
+                    <div class="form-group">
+                        <label for="jellyfin_url">Jellyfin URL</label>
+                        <input type="text" id="jellyfin_url" name="jellyfin_url" value="{{ config.jellyfin_url or '' }}" placeholder="http://jellyfin:8096">
+                    </div>
+                    <div class="form-group">
+                        <label for="jellyfin_api_key">Jellyfin API Key</label>
+                        <input type="text" id="jellyfin_api_key" name="jellyfin_api_key" value="{{ config.jellyfin_api_key or '' }}" placeholder="your_api_key">
+                    </div>
+                </div>
+                
+                <div id="plexFields" class="source-fields" {% if not config.plex_url %}style="display:none"{% endif %}>
+                    <div class="form-group">
+                        <label for="plex_url">Plex URL</label>
+                        <input type="text" id="plex_url" name="plex_url" value="{{ config.plex_url or '' }}" placeholder="http://plex:32400">
+                    </div>
+                    <div class="form-group">
+                        <label for="plex_token">Plex Token</label>
+                        <input type="text" id="plex_token" name="plex_token" value="{{ config.plex_token or '' }}" placeholder="your_plex_token">
+                    </div>
+                </div>
+                
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="admin-section">
+        <h2>Scan Media Library</h2>
+        <div class="card">
+            <form action="{{ url_for('admin.scan') }}" method="post">
+                <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% elif config.plex_url %}plex{% else %}filesystem{% endif %}">
+                <p>Scan your media from the configured source to update the library.</p>
+                <div class="form-submit">
+                    <button type="submit" id="scanButton">Start Scan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="admin-section" id="path-config">
+        <h2>Path Configuration</h2>
+        <div class="card">
+            <form action="{{ url_for('admin.update_paths') }}" method="post">
+                <div class="form-group">
+                    <label for="media_path">Media Path</label>
+                    <p class="help-text">The directory where your media files are stored.</p>
+                    <div class="input-with-button">
+                        <input type="text" id="media_path" name="media_path" value="{{ config.media_path }}" class="full-width">
+                        <button type="button" class="browse-button" onclick="openFileBrowser('media_path')">Browse</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="transcode_path">Transcode Path</label>
+                    <p class="help-text">Directory where transcoded files will be stored.</p>
+                    <div class="input-with-button">
+                        <input type="text" id="transcode_path" name="transcode_path" value="{{ config.transcode_path }}" class="full-width">
+                        <button type="button" class="browse-button" onclick="openFileBrowser('transcode_path')">Browse</button>
+                    </div>
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit">Save Paths</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="admin-section">
+        <h2>Transcoding Profiles</h2>
+        <div class="card">
+            <h3>Profile Management</h3>
+            <div class="button-container">
+                <a href="{{ url_for('admin.list_profiles') }}" class="button standard-button">Manage Profiles</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File Browser Modal -->
+<div id="fileBrowserModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Browse Directories</h2>
+            <span class="close" onclick="closeFileBrowser()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="current-path">
+                <span id="currentPath">/</span>
+            </div>
+            <div class="directory-list" id="directoryList">
+                <!-- Directory content will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" onclick="selectCurrentPath()">Select Current Path</button>
+            <button type="button" onclick="closeFileBrowser()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<form id="scanForm" action="{{ url_for('admin.scan') }}" method="post" style="display:none">
+    <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% elif config.plex_url %}plex{% else %}filesystem{% endif %}">
+</form>
+
+<script>
+    function toggleSourceFields() {
+        // Hide all source fields first
+        document.querySelectorAll('.source-fields').forEach(function(el) {
+            el.style.display = 'none';
+        });
+        
+        // Show the selected source fields
+        var selectedSource = document.querySelector('input[name="source"]:checked').value;
+        document.getElementById(selectedSource + 'Fields').style.display = 'block';
+        
+        // Update the scan type in the hidden form
+        document.getElementById('scan_type').value = selectedSource;
+    }
+    
+    function scanMedia() {
+        var selectedSource = document.querySelector('input[name="source"]:checked').value;
+        
+        // Check if necessary credentials are provided for media servers
+        if (selectedSource === 'jellyfin') {
+            var jellyfinUrl = document.getElementById('jellyfin_url').value;
+            var jellyfinApiKey = document.getElementById('jellyfin_api_key').value;
+            if (!jellyfinUrl || !jellyfinApiKey) {
+                alert('Please provide Jellyfin URL and API Key before scanning.');
+                return;
+            }
+        } else if (selectedSource === 'plex') {
+            var plexUrl = document.getElementById('plex_url').value;
+            var plexToken = document.getElementById('plex_token').value;
+            if (!plexUrl || !plexToken) {
+                alert('Please provide Plex URL and Token before scanning.');
+                return;
+            }
+        }
+        
+        // Submit the scan form
+        document.getElementById('scanForm').submit();
+    }
+    
+    // File browser functionality
+    let currentTargetField = null;
+    let currentPath = '/';
+    
+    function openFileBrowser(targetFieldId) {
+        currentTargetField = targetFieldId;
+        currentPath = '/';
+        document.getElementById('currentPath').textContent = currentPath;
+        
+        // Load the root directory
+        loadDirectoryContents(currentPath);
+        
+        // Show the modal
+        document.getElementById('fileBrowserModal').style.display = 'block';
+    }
+    
+    function closeFileBrowser() {
+        document.getElementById('fileBrowserModal').style.display = 'none';
+    }
+    
+    function loadDirectoryContents(path) {
+        // Make an AJAX request to get directory contents
+        fetch(`{{ url_for('admin.browse_filesystem') }}?path=${encodeURIComponent(path)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    return;
+                }
+                
+                const directoryList = document.getElementById('directoryList');
+                directoryList.innerHTML = '';
+                
+                // Add parent directory option if not at root
+                if (path !== '/') {
+                    const parentItem = document.createElement('div');
+                    parentItem.className = 'directory-item parent';
+                    parentItem.innerHTML = '<span class="directory-icon">📁</span> ..';
+                    parentItem.addEventListener('click', () => {
+                        const parentPath = path.split('/').slice(0, -1).join('/') || '/';
+                        navigateToDirectory(parentPath);
+                    });
+                    directoryList.appendChild(parentItem);
+                }
+                
+                // Add directories
+                data.directories.forEach(dir => {
+                    const dirItem = document.createElement('div');
+                    dirItem.className = 'directory-item';
+                    dirItem.innerHTML = `<span class="directory-icon">📁</span> ${dir}`;
+                    dirItem.addEventListener('click', () => {
+                        const newPath = path === '/' ? `/${dir}` : `${path}/${dir}`;
+                        navigateToDirectory(newPath);
+                    });
+                    directoryList.appendChild(dirItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching directory contents:', error);
+                alert('Failed to load directory contents. See console for details.');
+            });
+    }
+    
+    function navigateToDirectory(path) {
+        currentPath = path;
+        document.getElementById('currentPath').textContent = currentPath;
+        loadDirectoryContents(path);
+    }
+    
+    function selectCurrentPath() {
+        const targetField = document.getElementById(currentTargetField);
+        targetField.value = currentPath;
+        closeFileBrowser();
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleSourceFields();
+    });
+</script>
+{% endblock %}

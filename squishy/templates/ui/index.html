@@ -1,0 +1,275 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Squishy{% endblock %}
+
+{% block content %}
+<div class="media-library">
+    <h1>Media Library</h1>
+    
+    <div class="search-container">
+        <form action="{{ url_for('ui.index') }}" method="get" id="searchForm">
+            <input type="text" name="q" id="searchInput" placeholder="Search titles..." value="{{ search_query }}">
+            <input type="hidden" name="show_page" value="1"> <!-- Reset to page 1 on new search -->
+            <input type="hidden" name="movie_page" value="1"> <!-- Reset to page 1 on new search -->
+            <button type="submit">Search</button>
+            {% if search_query %}
+            <a href="{{ url_for('ui.index') }}" class="clear-search">Clear</a>
+            {% endif %}
+        </form>
+    </div>
+    
+    {% if shows or movies %}
+    
+    {% if shows %}
+    <div class="section-header">
+        <h2>TV Shows</h2>
+        <div class="section-stats">{{ total_shows }} show{% if total_shows != 1 %}s{% endif %} found</div>
+    </div>
+    
+    {% if shows %}
+    <div class="grid">
+        {% for show in shows %}
+        <div class="media-card">
+            <a href="{{ url_for('ui.show_detail', show_id=show.id) }}">
+                {% if show.poster_url %}
+                <img src="{{ show.poster_url }}" alt="{{ show.title }}">
+                {% else %}
+                <div class="placeholder-poster">
+                    <span>{{ show.title[0] }}</span>
+                </div>
+                {% endif %}
+                <div class="media-info">
+                    <h3>{{ show.display_name }}</h3>
+                    <span class="media-type">TV Show</span>
+                    <span class="media-count">{{ show.seasons|length }} season{% if show.seasons|length != 1 %}s{% endif %}</span>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if total_show_pages > 1 %}
+    <div class="pagination">
+        <div class="pagination-info">
+            Page {{ show_page }} of {{ total_show_pages }}
+        </div>
+        <div class="pagination-controls">
+            {% if show_page > 1 %}
+            <a href="{{ url_for('ui.index', show_page=show_page-1, movie_page=movie_page, q=search_query) }}" class="pagination-prev">Previous</a>
+            {% endif %}
+            
+            {% set start_page = show_page - 2 if show_page - 2 > 0 else 1 %}
+            {% set end_page = show_page + 3 if show_page + 3 <= total_show_pages + 1 else total_show_pages + 1 %}
+            {% for p in range(start_page, end_page) %}
+            <a href="{{ url_for('ui.index', show_page=p, movie_page=movie_page, q=search_query) }}" class="pagination-page {% if p == show_page %}active{% endif %}">{{ p }}</a>
+            {% endfor %}
+            
+            {% if show_page < total_show_pages %}
+            <a href="{{ url_for('ui.index', show_page=show_page+1, movie_page=movie_page, q=search_query) }}" class="pagination-next">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">
+        <p>No TV shows found matching your search.</p>
+    </div>
+    {% endif %}
+    {% endif %}
+    
+    {% if movies %}
+    <div class="section-header">
+        <h2>Movies</h2>
+        <div class="section-stats">{{ total_movies }} movie{% if total_movies != 1 %}s{% endif %} found</div>
+    </div>
+    
+    {% if movies %}
+    <div class="grid">
+        {% for movie in movies %}
+        <div class="media-card">
+            <a href="{{ url_for('ui.media_detail', media_id=movie.id) }}">
+                {% if movie.poster_url %}
+                <img src="{{ movie.poster_url }}" alt="{{ movie.title }}">
+                {% else %}
+                <div class="placeholder-poster">
+                    <span>{{ movie.title[0] }}</span>
+                </div>
+                {% endif %}
+                <div class="media-info">
+                    <h3>{{ movie.display_name }}</h3>
+                    <span class="media-type">Movie</span>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if total_movie_pages > 1 %}
+    <div class="pagination">
+        <div class="pagination-info">
+            Page {{ movie_page }} of {{ total_movie_pages }}
+        </div>
+        <div class="pagination-controls">
+            {% if movie_page > 1 %}
+            <a href="{{ url_for('ui.index', movie_page=movie_page-1, show_page=show_page, q=search_query) }}" class="pagination-prev">Previous</a>
+            {% endif %}
+            
+            {% set start_page = movie_page - 2 if movie_page - 2 > 0 else 1 %}
+            {% set end_page = movie_page + 3 if movie_page + 3 <= total_movie_pages + 1 else total_movie_pages + 1 %}
+            {% for p in range(start_page, end_page) %}
+            <a href="{{ url_for('ui.index', movie_page=p, show_page=show_page, q=search_query) }}" class="pagination-page {% if p == movie_page %}active{% endif %}">{{ p }}</a>
+            {% endfor %}
+            
+            {% if movie_page < total_movie_pages %}
+            <a href="{{ url_for('ui.index', movie_page=movie_page+1, show_page=show_page, q=search_query) }}" class="pagination-next">Next</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">
+        <p>No movies found matching your search.</p>
+    </div>
+    {% endif %}
+    {% endif %}
+    
+    {% else %}
+    <div class="empty-state">
+        <p>No media found. Use the admin interface to scan for media.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+    .section-header {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid var(--secondary-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    
+    .section-header h2 {
+        color: var(--primary-color);
+        margin: 0;
+    }
+    
+    .section-stats {
+        font-size: 0.9rem;
+        color: #777;
+    }
+    
+    .media-count {
+        display: block;
+        font-size: 0.8rem;
+        color: #777;
+    }
+    
+    .search-container {
+        margin: 1.5rem 0;
+    }
+    
+    .search-container form {
+        display: flex;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    
+    .search-container input {
+        flex: 1;
+        padding: 0.7rem;
+        border: 1px solid #ddd;
+        border-radius: 4px 0 0 4px;
+        font-size: 1rem;
+    }
+    
+    .search-container button {
+        border-radius: 0 4px 4px 0;
+        margin-left: -1px;
+    }
+    
+    .clear-search {
+        display: inline-block;
+        margin-left: 1rem;
+        padding: 0.7rem 1rem;
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+    
+    .clear-search:hover {
+        text-decoration: underline;
+    }
+    
+    /* Pagination styles */
+    .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 2rem 0;
+        padding: 1rem;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .pagination-info {
+        color: #666;
+    }
+    
+    .pagination-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .pagination-prev,
+    .pagination-next,
+    .pagination-page {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        background-color: #f5f5f5;
+        color: var(--primary-color);
+        border-radius: 4px;
+        text-decoration: none;
+    }
+    
+    .pagination-page.active {
+        background-color: var(--secondary-color);
+        color: white;
+    }
+    
+    .pagination-prev:hover,
+    .pagination-next:hover,
+    .pagination-page:hover:not(.active) {
+        background-color: #e0e0e0;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Live search functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        let searchTimeout;
+        
+        // Debounce function to avoid excessive requests
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                if (searchInput.value.trim() !== '') {
+                    // Reset pagination to page 1 on search
+                    const showPageInput = document.querySelector('input[name="show_page"]');
+                    const moviePageInput = document.querySelector('input[name="movie_page"]');
+                    if (showPageInput) showPageInput.value = "1";
+                    if (moviePageInput) moviePageInput.value = "1";
+                    
+                    document.getElementById('searchForm').submit();
+                }
+            }, 500); // Wait 500ms after user stops typing
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Transcoding Profiles - Squishy{% endblock %}
+
+{% block content %}
+<div class="profiles-list">
+    <div class="section-header">
+        <h1>Transcoding Profiles</h1>
+        <div class="actions">
+            <a href="{{ url_for('admin.add_profile') }}" class="button">Add New Profile</a>
+        </div>
+    </div>
+    
+    {% if profiles %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Resolution</th>
+                <th>Codec</th>
+                <th>Container</th>
+                <th>Quality</th>
+                <th>Bitrate</th>
+                <th class="align-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for profile in profiles %}
+            <tr>
+                <td>{{ profile.name }}</td>
+                <td>{{ profile.resolution }}</td>
+                <td>{{ profile.codec }}</td>
+                <td>{{ profile.container }}</td>
+                <td>{{ profile.quality }}</td>
+                <td>{{ profile.bitrate or "-" }}</td>
+                <td class="align-right">
+                    <div class="action-buttons">
+                        <a href="{{ url_for('admin.edit_profile', name=profile.name) }}" class="button small">Edit</a>
+                        <form action="{{ url_for('admin.delete_profile', name=profile.name) }}" method="post" class="inline-form">
+                            <button type="submit" class="button small danger">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No profiles found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

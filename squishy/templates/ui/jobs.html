@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}Transcoding Jobs - Squishy{% endblock %}
+
+{% block content %}
+<div class="jobs-list">
+    <h1>Transcoding Jobs</h1>
+    
+    {% if jobs %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Media</th>
+                <th>Profile</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Output</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td>{{ job.id }}</td>
+                <td>{{ job.media_id }}</td>
+                <td>{{ job.profile_name }}</td>
+                <td>{{ job.status }}</td>
+                <td>
+                    {% if job.status == "processing" %}
+                    <progress value="{{ job.progress }}" max="1.0"></progress>
+                    {% elif job.status == "completed" %}
+                    <span class="status-complete">Complete</span>
+                    {% elif job.status == "failed" %}
+                    <span class="status-failed">Failed</span>
+                    {% else %}
+                    <span class="status-pending">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if job.output_path %}
+                    <a href="/webdav/{{ job.output_path.split('/')[-1] }}" target="_blank">Download</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No transcoding jobs found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh the page every 10 seconds
+    setTimeout(function() {
+        location.reload();
+    }, 10000);
+</script>
+{% endblock %}

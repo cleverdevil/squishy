@@ -1,0 +1,1 @@
+"""Blueprint modules for the Squishy application."""

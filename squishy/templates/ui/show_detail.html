@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ show.display_name }} - Squishy{% endblock %}
+
+{% block content %}
+<div class="show-detail">
+    <div class="back-button-container">
+        <a href="{{ url_for('ui.index') }}" class="button back-button">← Back to Home</a>
+    </div>
+    
+    <div class="show-header">
+        {% if show.poster_url %}
+        <img src="{{ show.poster_url }}" alt="{{ show.title }}" class="show-poster">
+        {% else %}
+        <div class="placeholder-poster large">
+            <span>{{ show.title[0] }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="show-info">
+            <h1>{{ show.display_name }}</h1>
+            <p class="media-type">TV Show</p>
+        </div>
+    </div>
+    
+    <div class="seasons-container">
+        {% for season in show.sorted_seasons %}
+        <div class="season-block" id="season-{{ season.number }}">
+            <h2 class="season-title">{{ season.display_name }}</h2>
+            
+            <div class="episodes-list">
+                {% for episode in season.sorted_episodes %}
+                <div class="episode-item">
+                    <div class="episode-info">
+                        <h3 class="episode-title">{{ episode.display_name }}</h3>
+                        <p class="episode-path">{{ episode.path }}</p>
+                    </div>
+                    
+                    <div class="episode-actions">
+                        <form action="{{ url_for('ui.transcode', media_id=episode.id) }}" method="post" class="transcode-form">
+                            <div class="form-group">
+                                <label for="profile-{{ episode.id }}">Profile</label>
+                                <select id="profile-{{ episode.id }}" name="profile" required>
+                                    {% for name, profile in profiles.items() %}
+                                    <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit">Transcode</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

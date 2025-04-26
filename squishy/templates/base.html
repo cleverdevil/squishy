@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Squishy - Media Transcoding Made Simple{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">
+                <a href="{{ url_for('ui.index') }}">Squishy</a>
+            </div>
+            <ul>
+                <li><a href="{{ url_for('ui.index') }}">Home</a></li>
+                <li><a href="{{ url_for('ui.jobs') }}">Jobs</a></li>
+                <li><a href="{{ url_for('admin.index') }}">Admin</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <div class="container">
+        {% for message in get_flashed_messages() %}
+        <div class="flash">{{ message }}</div>
+        {% endfor %}
+        
+        {% block content %}{% endblock %}
+    </div>
+    
+    <footer>
+        <p>&copy; Squishy - Media Transcoding Made Simple</p>
+    </footer>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

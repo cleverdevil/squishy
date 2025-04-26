@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "squishy"
+version = "0.1.0"
+description = "Media Transcoding Made Simple"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "flask",
+    "flask-login",
+    "python-dotenv",
+    "requests",
+    "wsgidav",  # for WebDAV server
+    "ffmpeg-python",  # for transcoding
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+    "flake8",
+]
+
+[tool.setuptools]
+packages = ["squishy"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
