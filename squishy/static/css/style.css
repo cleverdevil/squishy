@@ -352,6 +352,7 @@ th, td {
 
 th.align-right, td.align-right {
   text-align: right !important;
+  align-items: right !important;
 }
 
 tbody tr:hover {
@@ -449,6 +450,16 @@ footer {
   margin-top: 1rem;
 }
 
+.profiles-list form {
+  width: auto;
+}
+
+.profiles-list .actions {
+  display: flex;
+  justify-content: right; /* Align items horizontally */
+  margin-top: 1.5rem;
+}
+
 .actions {
   margin-bottom: 1.5rem;
 }
@@ -460,6 +471,7 @@ footer {
 .inline-form {
   display: inline-flex;
   vertical-align: middle;
+  margin: 0;
 }
 
 .button.small {
@@ -508,12 +520,23 @@ footer {
   text-align: left;
 }
 
+td.align-right {
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* Action buttons */
 .action-buttons {
   display: flex;
   gap: 0.5rem;
   align-items: center;
   justify-content: flex-end;
+  width: 100%;
+}
+
+td.align-right .action-buttons {
+  justify-content: flex-end;
+  width: 100%;
 }
 
 /* Section headers with actions */
@@ -532,12 +555,6 @@ footer {
 .section-stats {
   color: #666;
   font-size: 0.9rem;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
 }
 .radio-group {
   display: flex;
@@ -590,6 +607,10 @@ hr {
   justify-content: center;
   box-sizing: border-box;
   height: 38px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
 }
 
 .button:hover {
@@ -714,4 +735,17 @@ hr {
 .browse-button {
   align-self: flex-start;
   white-space: nowrap;
+}
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.button.secondary {
+  background-color: #95a5a6;
+}
+
+.button.secondary:hover {
+  background-color: #7f8c8d;
 }

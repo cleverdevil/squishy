@@ -2,15 +2,17 @@
 
 {% block title %}Transcoding Profiles - Squishy{% endblock %}
 
+
 {% block content %}
+<div class="back-button-container">
+    <a href="{{ url_for('admin.index') }}" class="button back-button">← Back to Settings</a>
+</div>
+
 <div class="profiles-list">
     <div class="section-header">
         <h1>Transcoding Profiles</h1>
-        <div class="actions">
-            <a href="{{ url_for('admin.add_profile') }}" class="button">Add New Profile</a>
-        </div>
     </div>
-    
+
     {% if profiles %}
     <table>
         <thead>
@@ -34,9 +36,9 @@
                 <td>{{ profile.quality }}</td>
                 <td>{{ profile.bitrate or "-" }}</td>
                 <td class="align-right">
-                    <div class="action-buttons">
+                    <div class="action-buttons" style="">
                         <a href="{{ url_for('admin.edit_profile', name=profile.name) }}" class="button small">Edit</a>
-                        <form action="{{ url_for('admin.delete_profile', name=profile.name) }}" method="post" class="inline-form">
+                        <form action="{{ url_for('admin.delete_profile', name=profile.name) }}" method="post">
                             <button type="submit" class="button small danger">Delete</button>
                         </form>
                     </div>
@@ -50,5 +52,8 @@
         <p>No profiles found.</p>
     </div>
     {% endif %}
+    <div class="actions">
+        <a href="{{ url_for('admin.add_profile') }}" class="button">Add Profile</a>
+    </div>
 </div>
 {% endblock %}

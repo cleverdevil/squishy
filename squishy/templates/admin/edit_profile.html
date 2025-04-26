@@ -4,8 +4,12 @@
 
 {% block content %}
 <div class="profile-form">
+    <div class="back-button-container">
+        <a href="{{ url_for('admin.list_profiles') }}" class="button back-button">← Back to Profiles</a>
+    </div>
+
     <h1>Edit Profile: {{ profile.name }}</h1>
-    
+
     <form method="post">
         <div class="form-group">
             <label for="resolution">Resolution</label>
@@ -17,7 +21,7 @@
                 <option value="640x360" {% if profile.resolution == "640x360" %}selected{% endif %}>360p (640x360)</option>
             </select>
         </div>
-        
+
         <div class="form-group">
             <label for="codec">Codec</label>
             <select id="codec" name="codec" required>
@@ -26,7 +30,7 @@
                 <option value="av1" {% if profile.codec == "av1" %}selected{% endif %}>AV1</option>
             </select>
         </div>
-        
+
         <div class="form-group">
             <label for="container">Container</label>
             <select id="container" name="container" required>
@@ -34,7 +38,7 @@
                 <option value="mp4" {% if profile.container == "mp4" %}selected{% endif %}>MP4</option>
             </select>
         </div>
-        
+
         <div class="form-group">
             <label for="quality">Quality</label>
             <select id="quality" name="quality" required>
@@ -43,14 +47,14 @@
                 <option value="low" {% if profile.quality == "low" %}selected{% endif %}>Low</option>
             </select>
         </div>
-        
+
         <div class="form-group">
             <label for="bitrate">Bitrate (optional)</label>
             <input type="text" id="bitrate" name="bitrate" value="{{ profile.bitrate or '' }}" placeholder="e.g. 5M">
         </div>
-        
+
         <div class="form-actions">
-            <button type="submit">Update Profile</button>
+            <button type="submit" class="button">Update Profile</button>
             <a href="{{ url_for('admin.list_profiles') }}" class="button secondary">Cancel</a>
         </div>
     </form>

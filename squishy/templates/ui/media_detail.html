@@ -7,7 +7,7 @@
     <div class="back-button-container">
         <a href="{{ url_for('ui.index') }}" class="button back-button">← Back to Home</a>
     </div>
-    
+
     <div class="media-header">
         {% if media.poster_url %}
         <img src="{{ media.poster_url }}" alt="{{ media.title }}" class="media-poster">
@@ -16,22 +16,22 @@
             <span>{{ media.title[0] }}</span>
         </div>
         {% endif %}
-        
+
         <div class="media-info">
             <h1>{{ media.display_name }}</h1>
             <p class="media-type">{{ media.type|capitalize }}</p>
             <p class="media-path">{{ media.path }}</p>
-            
+
             <form action="{{ url_for('ui.transcode', media_id=media.id) }}" method="post" class="transcode-form">
                 <div class="form-group">
-                    <label for="profile">Transcode Profile</label>
+                    <label for="profile">Profile</label>
                     <select id="profile" name="profile" required>
                         {% for name, profile in profiles.items() %}
                         <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit">Start Transcode</button>
+                <button type="submit">Squish</button>
             </form>
         </div>
     </div>
