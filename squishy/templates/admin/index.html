@@ -5,7 +5,7 @@
 {% block content %}
 <div class="admin-dashboard">
     <h1>Admin Dashboard</h1>
-    
+
     <div class="admin-section">
         <h2>Media Source Configuration</h2>
         <div class="card">
@@ -24,7 +24,7 @@
                     <p>Your media is located at: <strong>{{ config.media_path }}</strong></p>
                     <p>You can edit this path in the <a href="#path-config">Path Configuration</a> section below.</p>
                 </div>
-                
+
                 <div id="jellyfinFields" class="source-fields" {% if not config.jellyfin_url %}style="display:none"{% endif %}>
                     <div class="form-group">
                         <label for="jellyfin_url">Jellyfin URL</label>
@@ -35,7 +35,7 @@
                         <input type="text" id="jellyfin_api_key" name="jellyfin_api_key" value="{{ config.jellyfin_api_key or '' }}" placeholder="your_api_key">
                     </div>
                 </div>
-                
+
                 <div id="plexFields" class="source-fields" {% if not config.plex_url %}style="display:none"{% endif %}>
                     <div class="form-group">
                         <label for="plex_url">Plex URL</label>
@@ -46,16 +46,14 @@
                         <input type="text" id="plex_token" name="plex_token" value="{{ config.plex_token or '' }}" placeholder="your_plex_token">
                     </div>
                 </div>
-                
-                </div>
-                
+
                 <div class="form-submit">
                     <button type="submit">Save Configuration</button>
                 </div>
             </form>
         </div>
     </div>
-    
+
     <div class="admin-section">
         <h2>Scan Media Library</h2>
         <div class="card">
@@ -68,7 +66,7 @@
             </form>
         </div>
     </div>
-    
+
     <div class="admin-section" id="path-config">
         <h2>Path Configuration</h2>
         <div class="card">
@@ -81,7 +79,7 @@
                         <button type="button" class="browse-button" onclick="openFileBrowser('media_path')">Browse</button>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="transcode_path">Transcode Path</label>
                     <p class="help-text">Directory where transcoded files will be stored.</p>
@@ -90,20 +88,21 @@
                         <button type="button" class="browse-button" onclick="openFileBrowser('transcode_path')">Browse</button>
                     </div>
                 </div>
-                
+
                 <div class="form-submit">
                     <button type="submit">Save Paths</button>
                 </div>
             </form>
         </div>
     </div>
-    
+
     <div class="admin-section">
         <h2>Transcoding Profiles</h2>
         <div class="card">
             <h3>Profile Management</h3>
-            <div class="button-container">
-                <a href="{{ url_for('admin.list_profiles') }}" class="button standard-button">Manage Profiles</a>
+            <p>Manage your transcoding profiles for different quality settings.</p>
+            <div class="form-submit">
+                <a href="{{ url_for('admin.list_profiles') }}" class="button">Manage Profiles</a>
             </div>
         </div>
     </div>
@@ -141,18 +140,18 @@
         document.querySelectorAll('.source-fields').forEach(function(el) {
             el.style.display = 'none';
         });
-        
+
         // Show the selected source fields
         var selectedSource = document.querySelector('input[name="source"]:checked').value;
         document.getElementById(selectedSource + 'Fields').style.display = 'block';
-        
+
         // Update the scan type in the hidden form
         document.getElementById('scan_type').value = selectedSource;
     }
-    
+
     function scanMedia() {
         var selectedSource = document.querySelector('input[name="source"]:checked').value;
-        
+
         // Check if necessary credentials are provided for media servers
         if (selectedSource === 'jellyfin') {
             var jellyfinUrl = document.getElementById('jellyfin_url').value;
@@ -169,31 +168,31 @@
                 return;
             }
         }
-        
+
         // Submit the scan form
         document.getElementById('scanForm').submit();
     }
-    
+
     // File browser functionality
     let currentTargetField = null;
     let currentPath = '/';
-    
+
     function openFileBrowser(targetFieldId) {
         currentTargetField = targetFieldId;
         currentPath = '/';
         document.getElementById('currentPath').textContent = currentPath;
-        
+
         // Load the root directory
         loadDirectoryContents(currentPath);
-        
+
         // Show the modal
         document.getElementById('fileBrowserModal').style.display = 'block';
     }
-    
+
     function closeFileBrowser() {
         document.getElementById('fileBrowserModal').style.display = 'none';
     }
-    
+
     function loadDirectoryContents(path) {
         // Make an AJAX request to get directory contents
         fetch(`{{ url_for('admin.browse_filesystem') }}?path=${encodeURIComponent(path)}`)
@@ -203,10 +202,10 @@
                     alert(`Error: ${data.error}`);
                     return;
                 }
-                
+
                 const directoryList = document.getElementById('directoryList');
                 directoryList.innerHTML = '';
-                
+
                 // Add parent directory option if not at root
                 if (path !== '/') {
                     const parentItem = document.createElement('div');
@@ -218,7 +217,7 @@
                     });
                     directoryList.appendChild(parentItem);
                 }
-                
+
                 // Add directories
                 data.directories.forEach(dir => {
                     const dirItem = document.createElement('div');
@@ -236,19 +235,19 @@
                 alert('Failed to load directory contents. See console for details.');
             });
     }
-    
+
     function navigateToDirectory(path) {
         currentPath = path;
         document.getElementById('currentPath').textContent = currentPath;
         loadDirectoryContents(path);
     }
-    
+
     function selectCurrentPath() {
         const targetField = document.getElementById(currentTargetField);
         targetField.value = currentPath;
         closeFileBrowser();
     }
-    
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         toggleSourceFields();

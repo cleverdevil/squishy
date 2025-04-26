@@ -274,8 +274,14 @@ nav ul li a:hover {
 }
 
 /* Form elements */
+form {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .form-group {
   margin-bottom: 1rem;
+  width: 100%;
 }
 
 .form-group label {
@@ -487,12 +493,6 @@ footer {
 
 .standard-button {
   font-size: 1rem;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.7rem 1.5rem;
-  box-sizing: border-box;
 }
 
 /* Table alignment */
@@ -544,6 +544,7 @@ footer {
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 1rem;
+  width: 100%;
 }
 
 .radio-group label {
@@ -562,6 +563,8 @@ footer {
   background-color: #f9f9f9;
   border-radius: 4px;
   border-left: 3px solid var(--secondary-color);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .scan-section {
@@ -576,13 +579,17 @@ hr {
 }
 
 .button {
-  display: inline-block;
+  display: inline-flex;
   background-color: var(--secondary-color);
   color: white;
   padding: 0.7rem 1.5rem;
   border-radius: 4px;
   text-decoration: none;
   font-weight: 500;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 38px;
 }
 
 .button:hover {
