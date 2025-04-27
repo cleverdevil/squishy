@@ -249,11 +249,12 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             active_hw_accel = config.hw_accel
             active_hw_device = config.hw_device
         
-        # Default to VAAPI if no acceleration specified
+        # Default to no hardware acceleration if none specified
+        # This prevents issues with incompatible hardware or drivers
         if not active_hw_accel:
-            active_hw_accel = "vaapi"
-            active_hw_device = "/dev/dri/renderD128"  # Default VAAPI device
-            logger.debug(f"Using default VAAPI hardware acceleration")
+            active_hw_accel = None
+            active_hw_device = None
+            logger.debug(f"No hardware acceleration specified, using software encoding")
         
         # Add hardware acceleration options if available
         has_hw_accel = False
@@ -301,8 +302,9 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
         # Add video scaling filter
         if active_hw_accel == "vaapi":
             # VAAPI hardware scaling - more efficient
+            # Use format=nv12,hwupload,scale_vaapi filter chain for maximum compatibility
             cmd.extend([
-                "-vf", f"scale_vaapi=w={width}:h={height}"
+                "-vf", f"format=nv12,hwupload,scale_vaapi=w={width}:h={height}:format=nv12"
             ])
         elif active_hw_accel in ["cuda", "nvenc"]:
             # CUDA hardware scaling - more efficient 
@@ -625,9 +627,12 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     job.ffmpeg_logs.append(f"NOTICE: Hardware acceleration with {active_hw_accel} failed, retrying with software encoding...")
                     
                     # Create a new software-only command
+                    # Note: We avoid using hardware acceleration entirely in the fallback
+                    # to ensure maximum compatibility
                     sw_cmd = [ffmpeg_path, "-i", media_item.path]
                     
                     # Add software video filter for scaling
+                    # Using standard ffmpeg software scaling, which has maximum compatibility
                     sw_cmd.extend(["-vf", f"scale={width}:{height}"])
                     
                     # Use software codec based on profile.codec
