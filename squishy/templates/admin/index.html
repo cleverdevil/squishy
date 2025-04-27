@@ -103,28 +103,6 @@
                     <input type="number" id="max_concurrent_jobs" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}" min="1" max="10">
                     <p class="help-text">Maximum number of transcoding jobs that can run simultaneously. Additional jobs will be queued.</p>
                 </div>
-                
-                <hr>
-                <h3>Hardware Acceleration (Global)</h3>
-                <p class="help-text">These settings will be used by default for all transcoding profiles unless overridden in individual profiles.</p>
-                
-                <div class="form-group">
-                    <label for="hw_accel">Hardware Acceleration Method</label>
-                    <select id="hw_accel" name="hw_accel">
-                        <option value="" {% if not config.hw_accel %}selected{% endif %}>None (Software Encoding)</option>
-                        <option value="nvenc" {% if config.hw_accel == "nvenc" %}selected{% endif %}>NVIDIA NVENC</option>
-                        <option value="qsv" {% if config.hw_accel == "qsv" %}selected{% endif %}>Intel QuickSync (QSV)</option>
-                        <option value="vaapi" {% if config.hw_accel == "vaapi" %}selected{% endif %}>VAAPI (Intel/AMD GPU)</option>
-                        <option value="videotoolbox" {% if config.hw_accel == "videotoolbox" %}selected{% endif %}>VideoToolbox (macOS)</option>
-                        <option value="amf" {% if config.hw_accel == "amf" %}selected{% endif %}>AMD AMF</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" id="hw_device_group" {% if config.hw_accel not in ["nvenc", "cuda", "vaapi"] %}style="display:none"{% endif %}>
-                    <label for="hw_device">Hardware Device</label>
-                    <input type="text" id="hw_device" name="hw_device" value="{{ config.hw_device or '' }}" placeholder="e.g. /dev/dri/renderD128 or 0">
-                    <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
-                </div>
 
                 <hr>
                 <h3>Path Mapping</h3>
@@ -555,7 +533,49 @@
     <div class="admin-section">
         <h2>Hardware Acceleration</h2>
         <div class="card">
-            <p>Hardware acceleration can significantly speed up transcoding. Detect your system's capabilities to use hardware-accelerated transcoding.</p>
+            <h3>Global Hardware Acceleration Settings</h3>
+            <p class="help-text">These settings will be used by default for all transcoding profiles unless overridden in individual profiles.</p>
+            
+            <form action="{{ url_for('admin.update_paths_and_mapping') }}" method="post">
+                <!-- Hidden fields to maintain other settings -->
+                <input type="hidden" name="media_path" value="{{ config.media_path }}">
+                <input type="hidden" name="transcode_path" value="{{ config.transcode_path }}">
+                <input type="hidden" name="ffmpeg_path" value="{{ config.ffmpeg_path }}">
+                <input type="hidden" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}">
+                {% if config.path_mappings and config.path_mappings.keys()|list %}
+                <input type="hidden" name="source_path" value="{{ config.path_mappings.keys()|list|first }}">
+                {% endif %}
+                {% if config.path_mappings and config.path_mappings.values()|list %}
+                <input type="hidden" name="target_path" value="{{ config.path_mappings.values()|list|first }}">
+                {% endif %}
+                
+                <div class="form-group">
+                    <label for="hw_accel">Hardware Acceleration Method</label>
+                    <select id="hw_accel" name="hw_accel">
+                        <option value="" {% if not config.hw_accel %}selected{% endif %}>None (Software Encoding)</option>
+                        <option value="nvenc" {% if config.hw_accel == "nvenc" %}selected{% endif %}>NVIDIA NVENC</option>
+                        <option value="qsv" {% if config.hw_accel == "qsv" %}selected{% endif %}>Intel QuickSync (QSV)</option>
+                        <option value="vaapi" {% if config.hw_accel == "vaapi" %}selected{% endif %}>VAAPI (Intel/AMD GPU)</option>
+                        <option value="videotoolbox" {% if config.hw_accel == "videotoolbox" %}selected{% endif %}>VideoToolbox (macOS)</option>
+                        <option value="amf" {% if config.hw_accel == "amf" %}selected{% endif %}>AMD AMF</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="hw_device_group" {% if config.hw_accel not in ["nvenc", "cuda", "vaapi"] %}style="display:none"{% endif %}>
+                    <label for="hw_device">Hardware Device</label>
+                    <input type="text" id="hw_device" name="hw_device" value="{{ config.hw_device or '' }}" placeholder="e.g. /dev/dri/renderD128 or 0">
+                    <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit" class="button">Save Hardware Settings</button>
+                </div>
+            </form>
+            
+            <hr>
+            
+            <h3>Hardware Detection</h3>
+            <p>Detect your system's hardware acceleration capabilities to optimize transcoding performance.</p>
             <div class="form-submit">
                 <a href="{{ url_for('admin.detect_hw_accel_route') }}" class="button">Detect Hardware Acceleration</a>
             </div>
