@@ -404,7 +404,7 @@ def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     - Movies with no video file (missing path)
     """
     # Filter TV shows to only include those with episodes
-    shows_with_episodes = [show for show in TV_SHOWS.values() if show.episodes]
+    shows_with_episodes = [show for show in TV_SHOWS.values() if show.seasons and any(season.episodes for season in show.seasons.values())]
     
     # Filter movies to only include those with a valid path
     valid_movies = [
