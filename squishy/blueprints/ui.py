@@ -1,5 +1,6 @@
 """User interface blueprint."""
 
+import os
 from flask import (
     Blueprint, render_template, request, redirect, url_for, current_app,
     flash
@@ -134,4 +135,50 @@ def transcode(media_id):
 def jobs():
     """Display transcoding jobs."""
     from squishy.transcoder import JOBS
-    return render_template("ui/jobs.html", jobs=JOBS.values())
+    
+    # Get media items for each job to display title instead of ID
+    job_data = []
+    for job in JOBS.values():
+        media_item = get_media(job.media_id)
+        if media_item:
+            # Get file size in a human-readable format
+            try:
+                file_size_bytes = os.path.getsize(media_item.path)
+                # Format file size in a human-readable way
+                if file_size_bytes < 1024 * 1024:  # Less than 1 MB
+                    file_size = f"{round(file_size_bytes / 1024, 2)} KB"
+                elif file_size_bytes < 1024 * 1024 * 1024:  # Less than 1 GB
+                    file_size = f"{round(file_size_bytes / (1024 * 1024), 2)} MB"
+                else:  # GB or larger
+                    file_size = f"{round(file_size_bytes / (1024 * 1024 * 1024), 2)} GB"
+                
+                # For TV shows, include show title
+                if media_item.type == "episode" and media_item.show_id:
+                    show = get_show(media_item.show_id)
+                    if show:
+                        media_title = f"{show.title} - {media_item.display_name}"
+                    else:
+                        media_title = media_item.display_name
+                else:
+                    media_title = media_item.display_name
+                
+                job_data.append({
+                    "job": job,
+                    "media_title": media_title,
+                    "file_size": file_size
+                })
+            except (FileNotFoundError, OSError):
+                # Handle case where file doesn't exist or can't be accessed
+                job_data.append({
+                    "job": job,
+                    "media_title": media_item.display_name if media_item else "Unknown",
+                    "file_size": "N/A"
+                })
+        else:
+            job_data.append({
+                "job": job,
+                "media_title": "Unknown",
+                "file_size": "N/A"
+            })
+    
+    return render_template("ui/jobs.html", job_data=job_data)

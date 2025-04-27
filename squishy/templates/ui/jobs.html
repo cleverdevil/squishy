@@ -6,12 +6,12 @@
 <div class="jobs-list">
     <h1>Transcoding Jobs</h1>
     
-    {% if jobs %}
+    {% if job_data %}
     <table>
         <thead>
             <tr>
-                <th>ID</th>
                 <th>Media</th>
+                <th>Size</th>
                 <th>Profile</th>
                 <th>Status</th>
                 <th>Progress</th>
@@ -19,26 +19,26 @@
             </tr>
         </thead>
         <tbody>
-            {% for job in jobs %}
+            {% for item in job_data %}
             <tr>
-                <td>{{ job.id }}</td>
-                <td>{{ job.media_id }}</td>
-                <td>{{ job.profile_name }}</td>
-                <td>{{ job.status }}</td>
+                <td>{{ item.media_title }}</td>
+                <td>{{ item.file_size }}</td>
+                <td>{{ item.job.profile_name }}</td>
+                <td class="status-{{ item.job.status }}">{{ item.job.status }}</td>
                 <td>
-                    {% if job.status == "processing" %}
-                    <progress value="{{ job.progress }}" max="1.0"></progress>
-                    {% elif job.status == "completed" %}
+                    {% if item.job.status == "processing" %}
+                    <progress value="{{ item.job.progress }}" max="1.0"></progress>
+                    {% elif item.job.status == "completed" %}
                     <span class="status-complete">Complete</span>
-                    {% elif job.status == "failed" %}
+                    {% elif item.job.status == "failed" %}
                     <span class="status-failed">Failed</span>
                     {% else %}
                     <span class="status-pending">Pending</span>
                     {% endif %}
                 </td>
                 <td>
-                    {% if job.output_path %}
-                    <a href="/webdav/{{ job.output_path.split('/')[-1] }}" target="_blank">Download</a>
+                    {% if item.job.output_path %}
+                    <a href="/webdav/{{ item.job.output_path.split('/')[-1] }}" target="_blank">Download</a>
                     {% endif %}
                 </td>
             </tr>

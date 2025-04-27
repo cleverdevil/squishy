@@ -761,3 +761,23 @@ hr {
   align-items: flex-end;
   margin-bottom: 1rem;
 }
+/* Status styling */
+.status-processing {
+  color: var(--warning-color);
+  font-weight: 500;
+}
+
+.status-completed {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+.status-failed {
+  color: var(--error-color);
+  font-weight: 500;
+}
+
+.status-pending {
+  color: var(--secondary-color);
+  font-weight: 500;
+}
