@@ -781,3 +781,26 @@ hr {
   color: var(--secondary-color);
   font-weight: 500;
 }
+/* Progress styling */
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  color: var(--dark-color);
+}
+
+.progress-time {
+  font-size: 0.75rem;
+  color: var(--secondary-color);
+}
+
+.output-size {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  margin-top: 0.25rem;
+}

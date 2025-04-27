@@ -5,7 +5,9 @@ import uuid
 import threading
 import logging
 import subprocess
-from typing import Dict, Optional
+import re
+import time
+from typing import Dict, Optional, Tuple
 
 from squishy.config import TranscodeProfile, load_config
 from squishy.models import TranscodeJob, MediaItem
@@ -140,6 +142,15 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
             # Add output path
             cmd.extend(["-y", output_path])
             
+            # Get media duration
+            duration = get_media_duration(ffmpeg_path, media_item.path)
+            if duration:
+                job.duration = duration
+                logger.debug(f"Media duration: {duration} seconds")
+            
+            # Add progress monitoring
+            cmd.extend(["-progress", "pipe:1"])
+            
             # Log the command
             logger.debug(f"FFmpeg command: {' '.join(cmd)}")
             
@@ -150,8 +161,37 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    universal_newlines=True
+                    universal_newlines=True,
+                    bufsize=1  # Line buffered
                 )
+                
+                # Monitor progress
+                while process.poll() is None:
+                    # Read progress output
+                    line = process.stdout.readline().strip()
+                    if line:
+                        # Parse progress information
+                        if line.startswith("out_time_ms="):
+                            try:
+                                time_ms = int(line.split("=")[1])
+                                current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                job.current_time = current_time
+                                
+                                if job.duration:
+                                    job.progress = min(current_time / job.duration, 0.99)
+                                    logger.debug(f"Progress: {job.progress:.2%}")
+                            except (ValueError, IndexError) as e:
+                                logger.warning(f"Error parsing time: {str(e)}")
+                    
+                    # Check output file size
+                    if os.path.exists(output_path):
+                        output_size = os.path.getsize(output_path)
+                        job.output_size = format_file_size(output_size)
+                    
+                    # Sleep briefly to avoid high CPU usage
+                    time.sleep(1)
+                
+                # Get the final output
                 stdout, stderr = process.communicate()
                 
                 if process.returncode != 0:
@@ -169,7 +209,13 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
             job.status = "completed"
             job.progress = 1.0
             job.output_path = output_path
-            logger.info(f"Job {job.id} completed successfully, output: {output_path}")
+            
+            # Get final output file size
+            if os.path.exists(output_path):
+                output_size = os.path.getsize(output_path)
+                job.output_size = format_file_size(output_size)
+                
+            logger.info(f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}")
             
         except Exception as e:
             logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
@@ -178,3 +224,35 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
     
     threading.Thread(target=transcode, daemon=True).start()
     logger.debug(f"Started transcoding thread for job {job.id}")
+def get_media_duration(ffmpeg_path: str, input_path: str) -> Optional[float]:
+    """Get the duration of a media file in seconds."""
+    try:
+        cmd = [ffmpeg_path, "-i", input_path]
+        result = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        
+        # Look for duration in the output
+        duration_match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})", result.stderr)
+        if duration_match:
+            hours = int(duration_match.group(1))
+            minutes = int(duration_match.group(2))
+            seconds = int(duration_match.group(3))
+            centiseconds = int(duration_match.group(4))
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds + centiseconds / 100
+            return total_seconds
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error getting media duration: {str(e)}")
+        return None
+
+def format_file_size(size_bytes: int) -> str:
+    """Format file size in a human-readable way."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{round(size_bytes / 1024, 2)} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{round(size_bytes / (1024 * 1024), 2)} MB"
+    else:
+        return f"{round(size_bytes / (1024 * 1024 * 1024), 2)} GB"

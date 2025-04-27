@@ -27,7 +27,13 @@
                 <td class="status-{{ item.job.status }}">{{ item.job.status }}</td>
                 <td>
                     {% if item.job.status == "processing" %}
-                    <progress value="{{ item.job.progress }}" max="1.0"></progress>
+                    <div class="progress-container">
+                        <progress value="{{ item.job.progress }}" max="1.0"></progress>
+                        <span class="progress-text">{{ (item.job.progress * 100)|int }}%</span>
+                        {% if item.job.current_time and item.job.duration %}
+                        <span class="progress-time">{{ item.job.current_time|int }}s / {{ item.job.duration|int }}s</span>
+                        {% endif %}
+                    </div>
                     {% elif item.job.status == "completed" %}
                     <span class="status-complete">Complete</span>
                     {% elif item.job.status == "failed" %}
@@ -39,6 +45,9 @@
                 <td>
                     {% if item.job.output_path %}
                     <a href="/webdav/{{ item.job.output_path.split('/')[-1] }}" target="_blank">Download</a>
+                    {% if item.job.output_size %}
+                    <span class="output-size">({{ item.job.output_size }})</span>
+                    {% endif %}
                     {% endif %}
                 </td>
             </tr>
@@ -55,9 +64,9 @@
 
 {% block scripts %}
 <script>
-    // Auto-refresh the page every 10 seconds
+    // Auto-refresh the page every 5 seconds
     setTimeout(function() {
         location.reload();
-    }, 10000);
+    }, 5000);
 </script>
 {% endblock %}

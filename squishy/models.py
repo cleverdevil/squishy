@@ -103,6 +103,9 @@ class TranscodeJob:
     progress: float = 0.0
     output_path: Optional[str] = None
     error_message: Optional[str] = None
+    output_size: Optional[str] = None
+    duration: Optional[float] = None
+    current_time: Optional[float] = None
     
     @property
     def is_complete(self) -> bool:
