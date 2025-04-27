@@ -130,3 +130,13 @@ def get_job_status(job_id):
         "output_path": job.output_path,
         "error_message": job.error_message,
     })
+@api_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
+def cancel_job_api(job_id):
+    """Cancel a transcoding job."""
+    from squishy.transcoder import cancel_job
+    
+    success = cancel_job(job_id)
+    if success:
+        return jsonify({"status": "cancelled"})
+    else:
+        return jsonify({"error": "Could not cancel job"}), 400

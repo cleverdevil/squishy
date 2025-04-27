@@ -182,3 +182,15 @@ def jobs():
             })
     
     return render_template("ui/jobs.html", job_data=job_data)
+@ui_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
+def cancel_job(job_id):
+    """Cancel a transcoding job."""
+    from squishy.transcoder import cancel_job as cancel_transcode_job
+    
+    success = cancel_transcode_job(job_id)
+    if success:
+        flash("Job cancelled successfully")
+    else:
+        flash("Could not cancel job", "error")
+    
+    return redirect(url_for("ui.jobs"))

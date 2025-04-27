@@ -804,3 +804,29 @@ hr {
   color: var(--secondary-color);
   margin-top: 0.25rem;
 }
+/* Cancel button styling */
+.cancel-button {
+  background-color: var(--error-color);
+  color: white;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.cancel-button:hover {
+  background-color: #c0392b;
+}
+
+.cancel-form {
+  display: inline-block;
+}
+
+/* Status styling for cancelled jobs */
+.status-cancelled {
+  color: #7f8c8d;
+  font-weight: 500;
+  text-decoration: line-through;
+}

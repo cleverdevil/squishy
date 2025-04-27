@@ -165,8 +165,18 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                     bufsize=1  # Line buffered
                 )
                 
+                # Store process ID for potential cancellation
+                job.process_id = process.pid
+                logger.debug(f"Process ID for job {job.id}: {job.process_id}")
+                
                 # Monitor progress
                 while process.poll() is None:
+                    # Check if job has been cancelled
+                    if job.status == "cancelled":
+                        logger.info(f"Job {job.id} has been cancelled, terminating process")
+                        process.terminate()
+                        break
+                        
                     # Read progress output
                     line = process.stdout.readline().strip()
                     if line:
@@ -190,6 +200,11 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                     
                     # Sleep briefly to avoid high CPU usage
                     time.sleep(1)
+                
+                # Check if job was cancelled
+                if job.status == "cancelled":
+                    logger.info(f"Job {job.id} was cancelled")
+                    return
                 
                 # Get the final output
                 stdout, stderr = process.communicate()
@@ -256,3 +271,31 @@ def format_file_size(size_bytes: int) -> str:
         return f"{round(size_bytes / (1024 * 1024), 2)} MB"
     else:
         return f"{round(size_bytes / (1024 * 1024 * 1024), 2)} GB"
+def cancel_job(job_id: str) -> bool:
+    """Cancel a transcoding job.
+    
+    Returns:
+        bool: True if the job was cancelled, False otherwise.
+    """
+    job = get_job(job_id)
+    if not job:
+        logger.warning(f"Attempted to cancel non-existent job: {job_id}")
+        return False
+        
+    if not job.is_active:
+        logger.warning(f"Attempted to cancel job {job_id} with status {job.status}")
+        return False
+    
+    logger.info(f"Cancelling job {job_id}")
+    job.status = "cancelled"
+    
+    # If the job has a process ID, try to terminate it directly
+    if job.process_id:
+        try:
+            import signal
+            os.kill(job.process_id, signal.SIGTERM)
+            logger.info(f"Sent SIGTERM to process {job.process_id}")
+        except (ProcessLookupError, PermissionError) as e:
+            logger.warning(f"Could not terminate process {job.process_id}: {str(e)}")
+    
+    return True

@@ -99,15 +99,21 @@ class TranscodeJob:
     id: str
     media_id: str
     profile_name: str
-    status: str  # "pending", "processing", "completed", "failed"
+    status: str  # "pending", "processing", "completed", "failed", "cancelled"
     progress: float = 0.0
     output_path: Optional[str] = None
     error_message: Optional[str] = None
     output_size: Optional[str] = None
     duration: Optional[float] = None
     current_time: Optional[float] = None
+    process_id: Optional[int] = None  # Store process ID for cancellation
     
     @property
     def is_complete(self) -> bool:
         """Check if the job is complete."""
         return self.status == "completed"
+        
+    @property
+    def is_active(self) -> bool:
+        """Check if the job is active (pending or processing)."""
+        return self.status in ("pending", "processing")

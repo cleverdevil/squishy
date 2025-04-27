@@ -38,6 +38,8 @@
                     <span class="status-complete">Complete</span>
                     {% elif item.job.status == "failed" %}
                     <span class="status-failed">Failed</span>
+                    {% elif item.job.status == "cancelled" %}
+                    <span class="status-cancelled">Cancelled</span>
                     {% else %}
                     <span class="status-pending">Pending</span>
                     {% endif %}
@@ -48,6 +50,10 @@
                     {% if item.job.output_size %}
                     <span class="output-size">({{ item.job.output_size }})</span>
                     {% endif %}
+                    {% elif item.job.status == "processing" %}
+                    <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
+                        <button type="submit" class="cancel-button">Cancel</button>
+                    </form>
                     {% endif %}
                 </td>
             </tr>
