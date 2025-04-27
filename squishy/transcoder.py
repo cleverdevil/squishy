@@ -597,7 +597,164 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             if process.returncode != 0:
                 logger.error(f"FFmpeg process failed with return code {process.returncode}")
                 logger.error(f"FFmpeg stderr: {stderr}")
-                raise RuntimeError(f"FFmpeg failed with return code {process.returncode}")
+                
+                # Check if this was a hardware acceleration failure
+                hw_accel_error = False
+                
+                # Error patterns for hardware acceleration failures
+                hw_error_patterns = [
+                    "No usable encoding profile found",
+                    "Error initializing output stream",
+                    "Invalid hardware device ",
+                    "Cannot load hwaccel",
+                    "Failed to set value",
+                    "Device creation failed",
+                    "Cannot open the hardware device",
+                    "Failed to open VAAPI device",
+                    "Error initializing an internal frame pool"
+                ]
+                
+                for pattern in hw_error_patterns:
+                    if pattern in stderr:
+                        hw_accel_error = True
+                        break
+                
+                # If hardware acceleration failed, retry with software encoding
+                if hw_accel_error and active_hw_accel:
+                    logger.warning(f"Hardware acceleration with {active_hw_accel} failed, falling back to software encoding")
+                    job.ffmpeg_logs.append(f"NOTICE: Hardware acceleration with {active_hw_accel} failed, retrying with software encoding...")
+                    
+                    # Create a new software-only command
+                    sw_cmd = [ffmpeg_path, "-i", media_item.path]
+                    
+                    # Add software video filter for scaling
+                    sw_cmd.extend(["-vf", f"scale={width}:{height}"])
+                    
+                    # Use software codec based on profile.codec
+                    if profile.codec == "h264":
+                        sw_cmd.extend(["-c:v", "libx264"])
+                        # Quality settings
+                        if profile.quality == "high":
+                            sw_cmd.extend(["-crf", "18"])
+                        elif profile.quality == "medium":
+                            sw_cmd.extend(["-crf", "22"])
+                        else:  # low
+                            sw_cmd.extend(["-crf", "28"])
+                    elif profile.codec == "hevc":
+                        sw_cmd.extend(["-c:v", "libx265"])
+                        # Quality settings
+                        if profile.quality == "high":
+                            sw_cmd.extend(["-crf", "22"])
+                        elif profile.quality == "medium":
+                            sw_cmd.extend(["-crf", "26"])
+                        else:  # low
+                            sw_cmd.extend(["-crf", "32"])
+                    else:  # Default to H.264
+                        sw_cmd.extend(["-c:v", "libx264", "-crf", "23"])
+                    
+                    # Add audio codec settings (same as before)
+                    sw_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
+                    
+                    # Add output file
+                    sw_cmd.extend(["-y", output_path])
+                    
+                    # Add progress monitoring
+                    sw_cmd.extend(["-progress", "pipe:1"])
+                    
+                    # Store the software command for reference
+                    sw_cmd_str = ' '.join(sw_cmd)
+                    job.ffmpeg_command = sw_cmd_str
+                    job.ffmpeg_logs.append(f"RETRY: Using software encoding command: {sw_cmd_str}")
+                    
+                    logger.info(f"Retrying with software encoding for job {job.id}")
+                    
+                    # Run the software encoding
+                    sw_process = subprocess.Popen(
+                        sw_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        bufsize=1  # Line buffered
+                    )
+                    
+                    # Store the process ID for potential cancellation
+                    job.process_id = sw_process.pid
+                    
+                    # Monitor software encoding progress (similar to before)
+                    sw_log_lines = job.ffmpeg_logs.copy()  # Keep previous logs
+                    
+                    while sw_process.poll() is None:
+                        # Check if job has been cancelled
+                        if job.status == "cancelled":
+                            logger.info(f"Software encoding job {job.id} was cancelled")
+                            sw_process.terminate()
+                            break
+                            
+                        # Read progress output from stdout
+                        stdout_line = sw_process.stdout.readline().strip()
+                        if stdout_line:
+                            # Parse progress information similar to before
+                            if stdout_line.startswith("out_time_ms="):
+                                try:
+                                    time_ms = int(stdout_line.split("=")[1])
+                                    current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                    job.current_time = current_time
+                                    
+                                    if job.duration:
+                                        job.progress = min(1.0, current_time / job.duration)
+                                        logger.debug(f"Progress: {job.progress:.2%}")
+                                except (ValueError, IndexError) as e:
+                                    logger.warning(f"Error parsing time: {str(e)}")
+                            
+                            # Store the line in logs
+                            sw_log_lines.append(f"STDOUT: {stdout_line}")
+                            if len(sw_log_lines) > max_log_lines:
+                                sw_log_lines.pop(0)  # Remove oldest line
+                        
+                        # Read stderr
+                        stderr_line = sw_process.stderr.readline().strip()
+                        if stderr_line:
+                            sw_log_lines.append(f"STDERR: {stderr_line}")
+                            if len(sw_log_lines) > max_log_lines:
+                                sw_log_lines.pop(0)
+                        
+                        # Update job logs
+                        job.ffmpeg_logs = sw_log_lines
+                        
+                        # Check output file size
+                        if os.path.exists(output_path):
+                            output_size = os.path.getsize(output_path)
+                            job.output_size = format_file_size(output_size)
+                        
+                        # Sleep briefly
+                        time.sleep(0.1)
+                    
+                    # Process software encoding result
+                    sw_stdout, sw_stderr = sw_process.communicate()
+                    
+                    # Add final output to logs
+                    for line in sw_stdout.splitlines():
+                        if line.strip():
+                            sw_log_lines.append(f"STDOUT: {line.strip()}")
+                    
+                    for line in sw_stderr.splitlines():
+                        if line.strip():
+                            sw_log_lines.append(f"STDERR: {line.strip()}")
+                    
+                    # Update job logs one last time
+                    job.ffmpeg_logs = sw_log_lines[-max_log_lines:] if len(sw_log_lines) > max_log_lines else sw_log_lines
+                    
+                    # Check if software encoding succeeded
+                    if sw_process.returncode != 0:
+                        logger.error(f"Software encoding also failed with return code {sw_process.returncode}")
+                        logger.error(f"FFmpeg stderr: {sw_stderr}")
+                        raise RuntimeError(f"Both hardware acceleration and software encoding failed for job {job.id}")
+                    else:
+                        # Software encoding succeeded, continue with success path
+                        logger.info(f"Software encoding succeeded after hardware acceleration failed for job {job.id}")
+                else:
+                    # Not a hardware acceleration error or no hardware acceleration was used
+                    raise RuntimeError(f"FFmpeg failed with return code {process.returncode}")
             
             logger.info(f"FFmpeg process completed successfully for job {job.id}")
             
