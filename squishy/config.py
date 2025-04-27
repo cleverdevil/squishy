@@ -35,16 +35,20 @@ class Config:
     
     media_path: str
     transcode_path: str
+    ffmpeg_path: str = "/usr/bin/ffmpeg"
     jellyfin_url: Optional[str] = None
     jellyfin_api_key: Optional[str] = None
     plex_url: Optional[str] = None
     plex_token: Optional[str] = None
+    path_mappings: Dict[str, str] = None
     profiles: Dict[str, TranscodeProfile] = None
     
     def __post_init__(self):
-        """Ensure profiles dictionary is initialized."""
+        """Ensure dictionaries are initialized."""
         if self.profiles is None:
             self.profiles = {}
+        if self.path_mappings is None:
+            self.path_mappings = {}
 
 def load_config(config_path: str = None) -> Config:
     """Load configuration from a JSON file."""
@@ -55,6 +59,8 @@ def load_config(config_path: str = None) -> Config:
     default_config = {
         "media_path": "/media",
         "transcode_path": "/app/data/transcodes",
+        "ffmpeg_path": "/usr/bin/ffmpeg",
+        "path_mappings": {},
         "profiles": [
             {
                 "name": "high",
@@ -112,14 +118,19 @@ def load_config(config_path: str = None) -> Config:
     media_path = config_data.get("media_path")
     if not media_path and "media_paths" in config_data and config_data["media_paths"]:
         media_path = config_data["media_paths"][0]
+    
+    # Get path mappings
+    path_mappings = config_data.get("path_mappings", {})
             
     return Config(
         media_path=media_path or default_config["media_path"],
         transcode_path=config_data.get("transcode_path", default_config["transcode_path"]),
+        ffmpeg_path=config_data.get("ffmpeg_path", default_config["ffmpeg_path"]),
         jellyfin_url=config_data.get("jellyfin_url"),
         jellyfin_api_key=config_data.get("jellyfin_api_key"),
         plex_url=config_data.get("plex_url"),
         plex_token=config_data.get("plex_token"),
+        path_mappings=path_mappings,
         profiles=profiles,
     )
 
@@ -144,7 +155,9 @@ def save_config(config: Config, config_path: str = None) -> None:
     config_data = {
         "media_path": config.media_path,
         "transcode_path": config.transcode_path,
+        "ffmpeg_path": config.ffmpeg_path,
         "profiles": profiles_data,
+        "path_mappings": config.path_mappings
     }
     
     # Only include one source configuration

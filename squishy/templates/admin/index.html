@@ -70,7 +70,7 @@
     <div class="admin-section" id="path-config">
         <h2>Path Configuration</h2>
         <div class="card">
-            <form action="{{ url_for('admin.update_paths') }}" method="post">
+            <form action="{{ url_for('admin.update_paths_and_mapping') }}" method="post">
                 <div class="form-group">
                     <label for="media_path">Media Path</label>
                     <p class="help-text">The directory where your media files are stored.</p>
@@ -89,22 +89,36 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="ffmpeg_path">FFmpeg Path</label>
+                    <p class="help-text">Path to the FFmpeg executable. This is required for transcoding.</p>
+                    <div class="input-with-button">
+                        <input type="text" id="ffmpeg_path" name="ffmpeg_path" value="{{ config.ffmpeg_path }}" class="full-width">
+                        <button type="button" class="browse-button" onclick="openFileBrowser('ffmpeg_path')">Browse</button>
+                    </div>
+                </div>
+
+                <hr>
+                <h3>Path Mapping</h3>
+                <p class="help-text">Path mapping helps resolve path differences between media servers and Squishy. For example, if your media server reports paths as "/media/Movies" but Squishy accesses them at "/opt/Media/Movies", you would map "/media" to "/opt/Media".</p>
+
+                <div class="path-mapping-row">
+                    <div class="form-group">
+                        <label for="source_path">Media Server Path</label>
+                        <input type="text" id="source_path" name="source_path" value="{% if config.path_mappings and config.path_mappings.keys()|list %}{{ config.path_mappings.keys()|list|first }}{% else %}{% endif %}" placeholder="/media">
+                    </div>
+                    <div class="form-group">
+                        <label for="target_path">Squishy Path</label>
+                        <input type="text" id="target_path" name="target_path" value="{% if config.path_mappings and config.path_mappings.values()|list %}{{ config.path_mappings.values()|list|first }}{% else %}{% endif %}" placeholder="/opt/media">
+                    </div>
+                </div>
+
                 <div class="form-submit">
-                    <button type="submit">Save Paths</button>
+                    <button type="submit" class="button">Save Configuration</button>
                 </div>
             </form>
         </div>
     </div>
-
-    <div class="admin-section">
-        <h2>Transcoding Profiles</h2>
-        <div class="card">
-            <h3>Profile Management</h3>
-            <p>Manage your transcoding profiles for different quality settings.</p>
-            <div class="form-submit">
-                <a href="{{ url_for('admin.list_profiles') }}" class="button">Manage Profiles</a>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -112,7 +126,7 @@
 <div id="fileBrowserModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2>Browse Directories</h2>
+            <h2 id="fileBrowserTitle">Browse Directories</h2>
             <span class="close" onclick="closeFileBrowser()">&times;</span>
         </div>
         <div class="modal-body">
@@ -176,11 +190,25 @@
     // File browser functionality
     let currentTargetField = null;
     let currentPath = '/';
+    let currentFileType = 'directory';
 
     function openFileBrowser(targetFieldId) {
         currentTargetField = targetFieldId;
         currentPath = '/';
         document.getElementById('currentPath').textContent = currentPath;
+        
+        // Set file type based on the target field
+        currentFileType = targetFieldId === 'ffmpeg_path' ? 'file' : 'directory';
+        
+        // Update modal title based on what we're browsing for
+        const modalTitle = document.getElementById('fileBrowserTitle');
+        if (modalTitle) {
+            if (currentFileType === 'file') {
+                modalTitle.textContent = 'Select FFmpeg Executable';
+            } else {
+                modalTitle.textContent = 'Browse Directories';
+            }
+        }
 
         // Load the root directory
         loadDirectoryContents(currentPath);
@@ -195,7 +223,7 @@
 
     function loadDirectoryContents(path) {
         // Make an AJAX request to get directory contents
-        fetch(`{{ url_for('admin.browse_filesystem') }}?path=${encodeURIComponent(path)}`)
+        fetch(`{{ url_for('admin.browse_filesystem') }}?path=${encodeURIComponent(path)}&type=${currentFileType}`)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
@@ -229,6 +257,19 @@
                     });
                     directoryList.appendChild(dirItem);
                 });
+                
+                // Add files (only for ffmpeg selection)
+                if (data.files && currentFileType === 'file') {
+                    data.files.forEach(file => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'directory-item file-item';
+                        fileItem.innerHTML = `<span class="file-icon">⚙️</span> ${file}`;
+                        fileItem.addEventListener('click', () => {
+                            selectFile(path, file);
+                        });
+                        directoryList.appendChild(fileItem);
+                    });
+                }
             })
             .catch(error => {
                 console.error('Error fetching directory contents:', error);
@@ -241,11 +282,24 @@
         document.getElementById('currentPath').textContent = currentPath;
         loadDirectoryContents(path);
     }
+    
+    function selectFile(path, filename) {
+        const fullPath = path === '/' ? `/${filename}` : `${path}/${filename}`;
+        const targetField = document.getElementById(currentTargetField);
+        targetField.value = fullPath;
+        closeFileBrowser();
+    }
 
     function selectCurrentPath() {
         const targetField = document.getElementById(currentTargetField);
-        targetField.value = currentPath;
-        closeFileBrowser();
+        // Only select the current path if we're browsing for directories
+        if (currentFileType === 'directory') {
+            targetField.value = currentPath;
+            closeFileBrowser();
+        } else {
+            // For files, show a message that they need to select a file
+            alert('Please select an FFmpeg executable file.');
+        }
     }
 
     // Initialize on page load
@@ -254,3 +308,13 @@
     });
 </script>
 {% endblock %}
+    <div class="admin-section">
+        <h2>Transcoding Profiles</h2>
+        <div class="card">
+            <h3>Profile Management</h3>
+            <p>Manage your transcoding profiles for different quality settings.</p>
+            <div class="form-submit">
+                <a href="{{ url_for('admin.list_profiles') }}" class="button">Manage Profiles</a>
+            </div>
+        </div>
+    </div>

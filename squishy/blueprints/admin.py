@@ -168,8 +168,9 @@ def update_paths():
 
 @admin_bp.route("/browse_filesystem")
 def browse_filesystem():
-    """Browse filesystem directories for the file browser modal."""
+    """Browse filesystem directories and files for the file browser modal."""
     path = request.args.get("path", "/")
+    file_type = request.args.get("type", "directory")  # 'directory' or 'file'
     
     # Sanitize path to prevent directory traversal attacks
     path = os.path.normpath(path)
@@ -177,23 +178,82 @@ def browse_filesystem():
         path = "/"
     
     try:
-        # Get directories in the specified path
+        # Get entries in the specified path
         entries = os.listdir(path)
         directories = []
+        files = []
         
         for entry in entries:
+            if entry.startswith('.'):
+                continue
+                
             full_path = os.path.join(path, entry)
-            if os.path.isdir(full_path) and not entry.startswith('.'):
+            if os.path.isdir(full_path):
                 directories.append(entry)
+            elif file_type == "file" and os.path.isfile(full_path):
+                # For ffmpeg path, we want to show executable files
+                if entry == "ffmpeg" or entry.endswith(".exe"):
+                    files.append(entry)
         
-        # Sort directories alphabetically
+        # Sort entries alphabetically
         directories.sort()
+        files.sort()
         
         return jsonify({
             "path": path,
-            "directories": directories
+            "directories": directories,
+            "files": files
         })
     except (FileNotFoundError, PermissionError) as e:
         return jsonify({
             "error": f"Could not access directory: {str(e)}"
         }), 400
+@admin_bp.route("/update_path_mappings", methods=["POST"])
+def update_path_mappings():
+    """Update path mapping configuration."""
+    config = load_config()
+    
+    # Get source and target paths from form
+    source_path = request.form.get("source_path", "").strip()
+    target_path = request.form.get("target_path", "").strip()
+    
+    # Create new path mappings dictionary
+    path_mappings = {}
+    if source_path and target_path:  # Only add if both fields are filled
+        path_mappings[source_path] = target_path
+    
+    # Update config
+    config.path_mappings = path_mappings
+    
+    save_config(config)
+    flash("Path mapping updated")
+    return redirect(url_for("admin.index"))
+@admin_bp.route("/update_paths_and_mapping", methods=["POST"])
+def update_paths_and_mapping():
+    """Update both path configuration and path mapping."""
+    config = load_config()
+    
+    # Get media and transcode paths
+    media_path = request.form["media_path"].strip()
+    transcode_path = request.form["transcode_path"].strip()
+    ffmpeg_path = request.form["ffmpeg_path"].strip()
+    
+    # Get source and target paths for mapping
+    source_path = request.form.get("source_path", "").strip()
+    target_path = request.form.get("target_path", "").strip()
+    
+    # Update config
+    config.media_path = media_path
+    config.transcode_path = transcode_path
+    config.ffmpeg_path = ffmpeg_path
+    
+    # Create new path mappings dictionary
+    path_mappings = {}
+    if source_path and target_path:  # Only add if both fields are filled
+        path_mappings[source_path] = target_path
+    
+    config.path_mappings = path_mappings
+    
+    save_config(config)
+    flash("Path configuration updated")
+    return redirect(url_for("admin.index"))

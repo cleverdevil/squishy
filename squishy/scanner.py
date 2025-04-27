@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import requests
 
 from squishy.models import MediaItem, Episode, TVShow
+from squishy.config import load_config
 
 # In-memory media store - in a real application, this would be in a database
 MEDIA: Dict[str, MediaItem] = {}
@@ -31,6 +32,23 @@ def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[int]]
             return season, episode
     
     return None, None
+
+def apply_path_mapping(path: str) -> str:
+    """Apply path mapping to convert media server paths to local paths."""
+    config = load_config()
+    
+    if not config.path_mappings:
+        return path
+    
+    # Get the single path mapping
+    if config.path_mappings:
+        source_path = next(iter(config.path_mappings.keys()), None)
+        target_path = next(iter(config.path_mappings.values()), None)
+        
+        if source_path and target_path and path.startswith(source_path):
+            return path.replace(source_path, target_path, 1)
+    
+    return path
 
 def scan_filesystem(media_paths: List[str]) -> List[MediaItem]:
     """Scan the filesystem for media files."""
@@ -149,12 +167,16 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
         for item in data.get("Items", []):
             if "Path" in item:
                 media_id = str(uuid.uuid4())
+                
+                # Apply path mapping to convert media server path to local path
+                mapped_path = apply_path_mapping(item["Path"])
+                
                 media_item = MediaItem(
                     id=media_id,
                     title=item.get("Name", ""),
                     year=item.get("ProductionYear"),
                     type="movie",
-                    path=item["Path"],
+                    path=mapped_path,
                     poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                 )
                 media_items.append(media_item)
@@ -194,6 +216,9 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 media_id = str(uuid.uuid4())
                 series_id = item["SeriesId"]
                 
+                # Apply path mapping to convert media server path to local path
+                mapped_path = apply_path_mapping(item["Path"])
+                
                 if series_id in shows_by_id:
                     show = shows_by_id[series_id]
                     season_num = item.get("ParentIndexNumber", 0)
@@ -206,7 +231,7 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         episode_number=episode_num,
                         title=item.get("Name", ""),
                         year=item.get("ProductionYear"),
-                        path=item["Path"]
+                        path=mapped_path
                     )
                     show.add_episode(episode)
                     
@@ -216,7 +241,7 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         title=item.get("Name", ""),
                         year=item.get("ProductionYear"),
                         type="episode",
-                        path=item["Path"],
+                        path=mapped_path,
                         poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                         show_id=show.id,
                         season_number=season_num,
@@ -323,6 +348,18 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                 year=episode.get("year"),
                                                 path=file_path
                                             )
+                                            # Apply path mapping to convert media server path to local path
+                                            mapped_path = apply_path_mapping(file_path)
+                                            
+                                            # Create the Episode object
+                                            ep = Episode(
+                                                id=media_id,
+                                                season_number=season_num,
+                                                episode_number=episode_num,
+                                                title=episode.get("title", ""),
+                                                year=episode.get("year"),
+                                                path=mapped_path
+                                            )
                                             shows_by_key[show_key].add_episode(ep)
                                             
                                             # Create the MediaItem
@@ -331,7 +368,7 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                 title=episode.get("title", ""),
                                                 year=episode.get("year"),
                                                 type="episode",
-                                                path=file_path,
+                                                path=mapped_path,
                                                 poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
                                                 show_id=show_id,
                                                 season_number=season_num,

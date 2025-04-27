@@ -4,11 +4,10 @@ import os
 import uuid
 import threading
 import logging
+import subprocess
 from typing import Dict, Optional
 
-import ffmpeg
-
-from squishy.config import TranscodeProfile
+from squishy.config import TranscodeProfile, load_config
 from squishy.models import TranscodeJob, MediaItem
 
 # Configure logging
@@ -63,15 +62,14 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
             os.makedirs(output_dir, exist_ok=True)
             logger.debug(f"Ensured output directory exists: {output_dir}")
             
-            # Build ffmpeg command
-            logger.debug(f"Input path: {media_item.path}")
-            logger.info(f"Setting up ffmpeg with input: {media_item.path}")
+            # Get ffmpeg path from config
+            config = load_config()
+            ffmpeg_path = config.ffmpeg_path
+            logger.debug(f"Using ffmpeg from: {ffmpeg_path}")
             
             # Check if input file exists
             if not os.path.exists(media_item.path):
                 raise FileNotFoundError(f"Input file not found: {media_item.path}")
-            
-            input_stream = ffmpeg.input(media_item.path)
             
             # Parse resolution
             logger.debug(f"Parsing resolution: {profile.resolution}")
@@ -82,15 +80,15 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                 logger.error(f"Invalid resolution format: {profile.resolution}")
                 raise ValueError(f"Invalid resolution format: {profile.resolution}")
             
-            # Set video codec and options
-            logger.debug("Configuring video stream")
-            video_stream = input_stream.video
-            video_stream = video_stream.filter("scale", width, height)
-            logger.debug(f"Applied scaling filter: {width}x{height}")
+            # Build ffmpeg command
+            cmd = [ffmpeg_path, "-i", media_item.path]
+            
+            # Add video codec and options
+            cmd.extend(["-vf", f"scale={width}:{height}"])
             
             if profile.codec == "h264":
                 logger.debug("Using h264 codec (libx264)")
-                video_stream = video_stream.codec("libx264")
+                cmd.extend(["-c:v", "libx264"])
                 if profile.quality == "high":
                     crf = "18"
                 elif profile.quality == "medium":
@@ -98,10 +96,10 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                 else:  # low
                     crf = "28"
                 logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
-                video_stream = video_stream.option("crf", crf)
+                cmd.extend(["-crf", crf])
             elif profile.codec == "hevc":
                 logger.debug("Using HEVC codec (libx265)")
-                video_stream = video_stream.codec("libx265")
+                cmd.extend(["-c:v", "libx265"])
                 if profile.quality == "high":
                     crf = "22"
                 elif profile.quality == "medium":
@@ -109,48 +107,61 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                 else:  # low
                     crf = "32"
                 logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
-                video_stream = video_stream.option("crf", crf)
+                cmd.extend(["-crf", crf])
+            elif profile.codec == "av1":
+                logger.debug("Using AV1 codec (libsvtav1)")
+                cmd.extend(["-c:v", "libsvtav1"])
+                if profile.quality == "high":
+                    crf = "24"
+                elif profile.quality == "medium":
+                    crf = "30"
+                else:  # low
+                    crf = "36"
+                logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
+                cmd.extend(["-crf", crf])
             else:
                 logger.warning(f"Unknown codec specified: {profile.codec}, defaulting to h264")
-                video_stream = video_stream.codec("libx264")
-                video_stream = video_stream.option("crf", "22")
+                cmd.extend(["-c:v", "libx264", "-crf", "22"])
             
             # Set bitrate if specified
             if profile.bitrate:
                 logger.debug(f"Setting bitrate to {profile.bitrate}")
-                video_stream = video_stream.bitrate(profile.bitrate)
+                cmd.extend(["-b:v", profile.bitrate])
             
             # Set audio codec
             logger.debug("Configuring audio stream with AAC codec at 128k")
-            try:
-                audio_stream = input_stream.audio.codec("aac").bitrate("128k")
-            except ffmpeg.Error as e:
-                logger.error(f"Error configuring audio stream: {e}")
-                # Try without specifying audio stream if it fails
-                logger.debug("Retrying without specifying audio stream explicitly")
-                audio_stream = input_stream.audio.codec("aac").bitrate("128k")
+            cmd.extend(["-c:a", "aac", "-b:a", "128k"])
             
-            # Run the transcoding
+            # Set output format
             logger.debug(f"Setting up output format: {profile.container}")
             output_format = "matroska" if profile.container == "mkv" else profile.container
             logger.debug(f"Using format: {output_format}")
             
-            output = ffmpeg.output(
-                video_stream, audio_stream, output_path,
-                f=output_format
-            )
+            # Add output path
+            cmd.extend(["-y", output_path])
             
-            # Get the ffmpeg command for logging
-            cmd = ffmpeg.compile(output)
+            # Log the command
             logger.debug(f"FFmpeg command: {' '.join(cmd)}")
             
-            # Set callback to monitor progress
+            # Run the transcoding
             logger.info(f"Starting FFmpeg process for job {job.id}")
             try:
-                output.global_args("-progress", "pipe:1").run(quiet=True)
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True
+                )
+                stdout, stderr = process.communicate()
+                
+                if process.returncode != 0:
+                    logger.error(f"FFmpeg process failed with return code {process.returncode}")
+                    logger.error(f"FFmpeg stderr: {stderr}")
+                    raise RuntimeError(f"FFmpeg failed with return code {process.returncode}")
+                
                 logger.info(f"FFmpeg process completed successfully for job {job.id}")
-            except ffmpeg.Error as e:
-                error_message = str(e.stderr.decode() if hasattr(e, 'stderr') else e)
+            except Exception as e:
+                error_message = str(e)
                 logger.error(f"FFmpeg error: {error_message}")
                 raise
             
