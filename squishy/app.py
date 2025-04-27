@@ -13,12 +13,15 @@ def create_app(test_config=None):
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
 
+    # Load configuration from config file
+    config = load_config()
+
     # Load default configuration
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
         DATABASE=os.path.join(app.instance_path, "squishy.sqlite"),
-        MEDIA_PATH=os.environ.get("MEDIA_PATH", "/media"),
-        TRANSCODE_PATH=os.path.join(app.instance_path, "transcodes"),
+        MEDIA_PATH=config.media_path,
+        TRANSCODE_PATH=config.transcode_path,
     )
 
     # Load the instance config, if it exists

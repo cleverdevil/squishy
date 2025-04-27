@@ -4,4 +4,5 @@
 from squishy.app import main
 
 if __name__ == "__main__":
+    # Reload configuration before starting the app
     main()
