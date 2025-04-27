@@ -13,7 +13,7 @@ and tablets.
 
 ## Features
 
-Squish has a focused set of features designed to make the process of selecting,
+Squishy has a focused set of features designed to make the process of selecting,
 transcoding, and downloading your media as frictionless as possible:
 
 * Attractive web interface to browse your media and transcoded files, including
@@ -26,15 +26,14 @@ transcoding, and downloading your media as frictionless as possible:
   case. Profiles define a target resolution, codec, and quality. Squishy comes
   with 4 profiles: high, medium, low, and potato, which target H.264 videos in
   either MKV or MP4 with 4K, 1080p, 720p, and 480p respectively.
-* Profile overrides to control every aspect of a particular profile.
-* Custom profiles to let you dial-in your personal preferences by selecting
+* Customize profiles to let you dial-in your personal preferences by selecting
   custom resolutions, bitrates, and codecs such as HEVC and AV1.
 * WebDAV server providing access to your transcoded media that is easy to
   integrate with media player apps like Infuse and VLC.
 
-  ## Installation
+## Installation
 
 
 Squishy can be run manually from source, but the recommended installation method
 is to run Squishy as a Docker Container. The repository includes a
-```docker-compose.`yml file for your convecnie
+```docker-compose.`yml file for your convenience.
