@@ -819,24 +819,76 @@ hr {
   color: var(--secondary-color);
   margin-top: 0.25rem;
 }
-/* Cancel button styling */
-.cancel-button {
-  background-color: var(--error-color);
-  color: white;
+/* Job action buttons styling */
+.action-buttons-container {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.circle-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
+  cursor: pointer;
+  transition: transform 0.2s, background-color 0.2s;
+  position: relative;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.circle-button:hover {
+  transform: scale(1.1);
+}
+
+.circle-button[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.2s;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.cancel-button {
+  background-color: var(--error-color);
 }
 
 .cancel-button:hover {
   background-color: #c0392b;
 }
 
+.download-circle-button {
+  background-color: var(--secondary-color);
+}
+
+.download-circle-button:hover {
+  background-color: #2980b9;
+}
+
+.logs-circle-button {
+  background-color: var(--primary-color);
+}
+
+.logs-circle-button:hover {
+  background-color: #34495e;
+}
+
 .cancel-form {
   display: inline-block;
+  margin: 0;
+  padding: 0;
 }
 
 /* Status styling for cancelled jobs */
