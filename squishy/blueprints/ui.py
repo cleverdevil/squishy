@@ -9,6 +9,7 @@ from flask import (
 from squishy.config import load_config
 from squishy.scanner import get_all_media, get_media, get_shows_and_movies, get_show
 from squishy.transcoder import create_job, get_job, start_transcode
+from squishy.completed import get_completed_transcodes
 
 ui_bp = Blueprint("ui", __name__)
 
@@ -194,3 +195,8 @@ def cancel_job(job_id):
         flash("Could not cancel job", "error")
     
     return redirect(url_for("ui.jobs"))
+@ui_bp.route("/completed")
+def completed():
+    """Display completed transcodes."""
+    completed_transcodes = get_completed_transcodes(current_app.config["TRANSCODE_PATH"])
+    return render_template("ui/completed.html", transcodes=completed_transcodes)

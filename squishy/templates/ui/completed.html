@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Completed Transcodes - Squishy{% endblock %}
+
+{% block content %}
+<div class="completed-list">
+    <h1>Completed Transcodes</h1>
+    
+    {% if transcodes %}
+    <div class="transcode-grid">
+        {% for transcode in transcodes %}
+        <div class="transcode-card">
+            <div class="transcode-poster">
+                {% if transcode.poster_url %}
+                <img src="{{ transcode.poster_url }}" alt="{{ transcode.title }}">
+                {% else %}
+                <div class="no-poster">No Poster</div>
+                {% endif %}
+            </div>
+            <div class="transcode-details">
+                <h3 class="transcode-title">
+                    {% if transcode.type == "movie" %}
+                    {{ transcode.title }} {% if transcode.year %}({{ transcode.year }}){% endif %}
+                    {% elif transcode.type == "episode" %}
+                    {{ transcode.title }}
+                    <div class="episode-info">
+                        {% if transcode.season_number and transcode.episode_number %}
+                        S{{ transcode.season_number }}E{{ transcode.episode_number }}
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    {{ transcode.title }}
+                    {% endif %}
+                </h3>
+                <div class="transcode-meta">
+                    <span class="profile-name">{{ transcode.profile_name }}</span>
+                    <span class="file-size">{{ transcode.output_size }}</span>
+                </div>
+                <div class="transcode-date">
+                    Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}
+                </div>
+                <div class="transcode-actions">
+                    <a href="/webdav/{{ transcode.file_name }}" class="download-button">Download</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No completed transcodes found.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

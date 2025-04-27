@@ -7,6 +7,8 @@ import logging
 import subprocess
 import re
 import time
+import json
+import datetime
 from typing import Dict, Optional, Tuple
 
 from squishy.config import TranscodeProfile, load_config
@@ -234,6 +236,33 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
                 job.output_size = format_file_size(output_size)
                 
             logger.info(f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}")
+            
+            # Create JSON sidecar file with metadata
+            sidecar_path = f"{output_path}.json"
+            metadata = {
+                "original_path": media_item.path,
+                "media_id": media_item.id,
+                "title": media_item.title,
+                "year": media_item.year,
+                "type": media_item.type,
+                "poster_url": media_item.poster_url,
+                "profile_name": profile.name,
+                "completed_at": datetime.datetime.now().isoformat(),
+                "output_size": job.output_size,
+                "duration": job.duration
+            }
+            
+            # Add TV show specific metadata if applicable
+            if media_item.type == "episode" and media_item.show_id:
+                metadata["show_id"] = media_item.show_id
+                metadata["season_number"] = media_item.season_number
+                metadata["episode_number"] = media_item.episode_number
+            
+            # Write metadata to sidecar file
+            with open(sidecar_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+                
+            logger.info(f"Created metadata sidecar file: {sidecar_path}")
             
         except Exception as e:
             logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)

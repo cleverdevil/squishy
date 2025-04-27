@@ -830,3 +830,105 @@ hr {
   font-weight: 500;
   text-decoration: line-through;
 }
+/* Completed transcodes page */
+.completed-list h1 {
+  margin-bottom: 1rem;
+}
+
+.transcode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.transcode-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background-color: white;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.transcode-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.transcode-poster {
+  height: 200px;
+  overflow: hidden;
+}
+
+.transcode-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.no-poster {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+.transcode-details {
+  padding: 1rem;
+}
+
+.transcode-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.episode-info {
+  font-size: 0.9rem;
+  color: var(--secondary-color);
+  margin-top: 0.25rem;
+}
+
+.transcode-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.profile-name {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.file-size {
+  color: var(--secondary-color);
+}
+
+.transcode-date {
+  font-size: 0.8rem;
+  color: var(--dark-color);
+  margin-bottom: 1rem;
+}
+
+.transcode-actions {
+  margin-top: auto;
+}
+
+.download-button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.download-button:hover {
+  background-color: var(--primary-dark-color);
+}
