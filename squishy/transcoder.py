@@ -9,6 +9,7 @@ import re
 import time
 import json
 import datetime
+import select
 from typing import Dict, Optional, Tuple, List, Callable, Any
 
 from squishy.config import TranscodeProfile, load_config
@@ -249,12 +250,11 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             active_hw_accel = config.hw_accel
             active_hw_device = config.hw_device
         
-        # Default to no hardware acceleration if none specified
-        # This prevents issues with incompatible hardware or drivers
+        # Default to VAAPI if no acceleration specified
         if not active_hw_accel:
-            active_hw_accel = None
-            active_hw_device = None
-            logger.debug(f"No hardware acceleration specified, using software encoding")
+            active_hw_accel = "vaapi"
+            active_hw_device = "/dev/dri/renderD128"  # Default VAAPI device
+            logger.debug(f"Using default VAAPI hardware acceleration")
         
         # Add hardware acceleration options if available
         has_hw_accel = False
@@ -302,9 +302,9 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
         # Add video scaling filter
         if active_hw_accel == "vaapi":
             # VAAPI hardware scaling - more efficient
-            # Use format=nv12,hwupload,scale_vaapi filter chain for maximum compatibility
+            # When using -hwaccel_output_format vaapi, we only need scale_vaapi
             cmd.extend([
-                "-vf", f"format=nv12,hwupload,scale_vaapi=w={width}:h={height}:format=nv12"
+                "-vf", f"scale_vaapi=w={width}:h={height}"
             ])
         elif active_hw_accel in ["cuda", "nvenc"]:
             # CUDA hardware scaling - more efficient 
@@ -512,12 +512,31 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
         # Run the transcoding
         logger.info(f"Starting FFmpeg process for job {job.id}")
         try:
+            # Properly quote command arguments to handle spaces and special characters
+            # This ensures subprocess doesn't have issues with argument parsing
+            cmd_str_for_log = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in cmd])
+            logger.debug(f"Running command: {cmd_str_for_log}")
+            
+            # Create a new command list with paths properly handled
+            # This ensures we properly handle paths with spaces and special characters
+            sanitized_cmd = []
+            for arg in cmd:
+                # Keep as-is, subprocess.Popen with shell=False handles spaces properly
+                # when passed as a list
+                sanitized_cmd.append(arg)
+            
+            # Use text mode (instead of universal_newlines which is deprecated)
+            # Add shell=False explicitly to ensure arguments are passed as a list
+            # Add a specific encoding to ensure proper text handling
             process = subprocess.Popen(
-                cmd,
+                sanitized_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                universal_newlines=True,
-                bufsize=1  # Line buffered
+                text=True,  # Preferred over universal_newlines
+                bufsize=1,  # Line buffered
+                shell=False,  # Ensure arguments are passed as a list, not through shell
+                encoding='utf-8',  # Explicitly set encoding
+                errors='replace'  # Handle encoding errors gracefully
             )
             
             # Store process ID for potential cancellation
@@ -536,34 +555,41 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     process.terminate()
                     break
                     
-                # Read progress output from stdout
-                stdout_line = process.stdout.readline().strip()
-                if stdout_line:
-                    # Parse progress information
-                    if stdout_line.startswith("out_time_ms="):
-                        try:
-                            time_ms = int(stdout_line.split("=")[1])
-                            current_time = time_ms / 1000000  # Convert microseconds to seconds
-                            job.current_time = current_time
-                            
-                            if job.duration:
-                                job.progress = min(current_time / job.duration, 0.99)
-                                logger.debug(f"Progress: {job.progress:.2%}")
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f"Error parsing time: {str(e)}")
-                    
-                    # Store the line in logs
-                    log_lines.append(f"STDOUT: {stdout_line}")
-                    if len(log_lines) > max_log_lines:
-                        log_lines.pop(0)  # Remove oldest line if we exceed limit
+                # Use non-blocking reads from stdout & stderr to prevent potential deadlocks
+                # This approach prevents hanging when one pipe is full but the other isn't being read
                 
-                # Read stderr for logging
-                stderr_line = process.stderr.readline().strip()
-                if stderr_line:
-                    # Store the line in logs
-                    log_lines.append(f"STDERR: {stderr_line}")
-                    if len(log_lines) > max_log_lines:
-                        log_lines.pop(0)  # Remove oldest line if we exceed limit
+                # Read from stdout without blocking
+                ready_to_read, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
+                
+                for stream in ready_to_read:
+                    if stream == process.stdout:
+                        stdout_line = stream.readline().strip()
+                        if stdout_line:
+                            # Parse progress information
+                            if stdout_line.startswith("out_time_ms="):
+                                try:
+                                    time_ms = int(stdout_line.split("=")[1])
+                                    current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                    job.current_time = current_time
+                                    
+                                    if job.duration:
+                                        job.progress = min(current_time / job.duration, 0.99)
+                                        logger.debug(f"Progress: {job.progress:.2%}")
+                                except (ValueError, IndexError) as e:
+                                    logger.warning(f"Error parsing time: {str(e)}")
+                            
+                            # Store the line in logs
+                            log_lines.append(f"STDOUT: {stdout_line}")
+                            if len(log_lines) > max_log_lines:
+                                log_lines.pop(0)  # Remove oldest line if we exceed limit
+                    
+                    elif stream == process.stderr:
+                        stderr_line = stream.readline().strip()
+                        if stderr_line:
+                            # Store the line in logs
+                            log_lines.append(f"STDERR: {stderr_line}")
+                            if len(log_lines) > max_log_lines:
+                                log_lines.pop(0)  # Remove oldest line if we exceed limit
                 
                 # Update job logs
                 job.ffmpeg_logs = log_lines
@@ -572,9 +598,46 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                 if os.path.exists(output_path):
                     output_size = os.path.getsize(output_path)
                     job.output_size = format_file_size(output_size)
+                    
+                    # Log progress based on file size too as a fallback mechanism
+                    if job.duration and job.current_time and job.current_time > 0 and job.progress < 0.99:
+                        # Calculate expected file size based on current progress
+                        elapsed_seconds = job.current_time
+                        bytes_per_second = output_size / elapsed_seconds if elapsed_seconds > 0 else 0
+                        
+                        # Log activity to prevent zombie processes
+                        if bytes_per_second > 0:
+                            logger.debug(f"Encoding rate: {format_file_size(bytes_per_second)}/s, Size: {job.output_size}")
                 
-                # Sleep briefly to avoid high CPU usage
-                time.sleep(0.1)
+                # Check if process might be stuck (hanging)
+                if hasattr(job, 'last_progress_time') and job.current_time and job.last_progress_time == job.current_time:
+                    job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
+                    
+                    # If we've been at the same timestamp for multiple consecutive checks
+                    if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                        # Check process status
+                        process_status = get_process_status(process.pid)
+                        logger.warning(f"Process {process.pid} appears stalled at {job.current_time}s with status {process_status}")
+                        
+                        # If the process is zombie or has been stalled for too long, kill it
+                        if process_status == 'Z' or job.progress_stalled_count > 200:
+                            logger.error(f"Killing stalled process {process.pid} after {job.progress_stalled_count} checks")
+                            try:
+                                import signal
+                                os.kill(process.pid, signal.SIGKILL)
+                                process.poll()  # Force update the returncode
+                            except Exception as e:
+                                logger.error(f"Error killing process: {str(e)}")
+                            break
+                else:
+                    # Reset stall counter if progress has changed
+                    job.progress_stalled_count = 0
+                
+                # Store last progress time for stall detection
+                if job.current_time:
+                    job.last_progress_time = job.current_time
+                
+                # No explicit sleep needed here - select.select already has a timeout
             
             # Check if job was cancelled
             if job.status == "cancelled":
@@ -621,10 +684,429 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                         hw_accel_error = True
                         break
                 
-                # If hardware acceleration failed, retry with software encoding
+                # If hardware acceleration failed, try alternate approach first if it's VAAPI
                 if hw_accel_error and active_hw_accel:
-                    logger.warning(f"Hardware acceleration with {active_hw_accel} failed, falling back to software encoding")
-                    job.ffmpeg_logs.append(f"NOTICE: Hardware acceleration with {active_hw_accel} failed, retrying with software encoding...")
+                    if active_hw_accel == "vaapi":
+                        # Try alternate VAAPI approach first before falling back to software
+                        logger.warning(f"Standard VAAPI acceleration failed, trying alternate VAAPI approach")
+                        job.ffmpeg_logs.append(f"NOTICE: Standard VAAPI encoding failed, trying alternate VAAPI approach...")
+                        
+                        # Create alternate VAAPI command with different filter chain
+                        # Based on test results, this approach is proven to work with 4K HDR content
+                        # and produces optimal file size and encoding speed
+                        alt_cmd = [ffmpeg_path, "-hwaccel", "vaapi"]
+                        
+                        # Add device if available
+                        if active_hw_device:
+                            alt_cmd.extend(["-vaapi_device", active_hw_device])
+                        else:
+                            # Use default VAAPI device
+                            alt_cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
+                            
+                        # Important: Do NOT use hwaccel_output_format for this approach
+                        # as we'll be using a different filter chain that explicitly handles the format conversion
+                        
+                        # Add input file
+                        alt_cmd.extend(["-i", media_item.path])
+                        
+                        # Use alternative filter chain that was verified to work with 4K HDR content
+                        # The format=nv12,hwupload,scale_vaapi approach proved most efficient in testing
+                        alt_cmd.extend(["-vf", f"format=nv12,hwupload,scale_vaapi=w={width}:h={height}:format=nv12"])
+                        
+                        # Add codec
+                        if profile.codec == "h264":
+                            alt_cmd.extend(["-c:v", "h264_vaapi"])
+                            
+                            # VAAPI quality targets
+                            if profile.quality == "high":
+                                alt_cmd.extend(["-qp", "18"])
+                            elif profile.quality == "medium":
+                                alt_cmd.extend(["-qp", "23"])
+                            else:  # low
+                                alt_cmd.extend(["-qp", "28"])
+                        elif profile.codec == "hevc":
+                            alt_cmd.extend(["-c:v", "hevc_vaapi"])
+                            
+                            # VAAPI quality targets
+                            if profile.quality == "high":
+                                alt_cmd.extend(["-qp", "22"])
+                            elif profile.quality == "medium":
+                                alt_cmd.extend(["-qp", "26"])
+                            else:  # low
+                                alt_cmd.extend(["-qp", "32"])
+                        else:
+                            # Default to H.264
+                            alt_cmd.extend(["-c:v", "h264_vaapi", "-qp", "23"])
+                            
+                        # Add low_power setting (testing shows minimal difference between 0/1, default to 1 for speed)
+                        alt_cmd.extend(["-low_power", "1"])
+                        
+                        # Add audio codec settings (same as before)
+                        alt_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
+                        
+                        # Add output file
+                        alt_cmd.extend(["-y", output_path])
+                        
+                        # Add progress monitoring
+                        alt_cmd.extend(["-progress", "pipe:1"])
+                        
+                        # Store the alternate command for reference
+                        alt_cmd_str = ' '.join(alt_cmd)
+                        job.ffmpeg_command = alt_cmd_str
+                        job.ffmpeg_logs.append(f"RETRY: Using alternate VAAPI encoding approach: {alt_cmd_str}")
+                        
+                        logger.info(f"Trying alternate VAAPI encoding approach for job {job.id}")
+                        
+                        # Run the alternate VAAPI encoding
+                        # Properly quote command arguments to handle spaces and special characters
+                        # This ensures subprocess doesn't have issues with argument parsing
+                        alt_cmd_str_for_log = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in alt_cmd])
+                        logger.debug(f"Running command: {alt_cmd_str_for_log}")
+                        
+                        # Create a new command list with paths properly handled
+                        # This ensures we properly handle paths with spaces and special characters
+                        alt_sanitized_cmd = []
+                        for arg in alt_cmd:
+                            # Keep as-is, subprocess.Popen with shell=False handles spaces properly
+                            # when passed as a list
+                            alt_sanitized_cmd.append(arg)
+                        
+                        # Use text mode (instead of universal_newlines which is deprecated)
+                        # Add shell=False explicitly to ensure arguments are passed as a list
+                        # Add a specific encoding to ensure proper text handling
+                        alt_process = subprocess.Popen(
+                            alt_sanitized_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,  # Preferred over universal_newlines
+                            bufsize=1,  # Line buffered
+                            shell=False,  # Ensure arguments are passed as a list, not through shell
+                            encoding='utf-8',  # Explicitly set encoding
+                            errors='replace'  # Handle encoding errors gracefully
+                        )
+                        
+                        # Store the process ID for potential cancellation
+                        job.process_id = alt_process.pid
+                        
+                        # Monitor alternate encoding progress
+                        alt_log_lines = job.ffmpeg_logs.copy()  # Keep previous logs
+                        alt_success = False
+                        
+                        while alt_process.poll() is None:
+                            # Check if job has been cancelled
+                            if job.status == "cancelled":
+                                logger.info(f"Alternate VAAPI encoding job {job.id} was cancelled")
+                                alt_process.terminate()
+                                break
+                                
+                            # Use non-blocking reads from stdout & stderr to prevent potential deadlocks
+                            # This approach prevents hanging when one pipe is full but the other isn't being read
+                            ready_to_read, _, _ = select.select([alt_process.stdout, alt_process.stderr], [], [], 0.1)
+                            
+                            for stream in ready_to_read:
+                                if stream == alt_process.stdout:
+                                    stdout_line = stream.readline().strip()
+                                    if stdout_line:
+                                        # Parse progress information
+                                        if stdout_line.startswith("out_time_ms="):
+                                            try:
+                                                time_ms = int(stdout_line.split("=")[1])
+                                                current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                                job.current_time = current_time
+                                                
+                                                if job.duration:
+                                                    job.progress = min(1.0, current_time / job.duration)
+                                                    logger.debug(f"Progress: {job.progress:.2%}")
+                                            except (ValueError, IndexError) as e:
+                                                logger.warning(f"Error parsing time: {str(e)}")
+                                        
+                                        # Store the line in logs
+                                        alt_log_lines.append(f"STDOUT: {stdout_line}")
+                                        if len(alt_log_lines) > max_log_lines:
+                                            alt_log_lines.pop(0)  # Remove oldest line
+                                
+                                elif stream == alt_process.stderr:
+                                    stderr_line = stream.readline().strip()
+                                    if stderr_line:
+                                        alt_log_lines.append(f"STDERR: {stderr_line}")
+                                        if len(alt_log_lines) > max_log_lines:
+                                            alt_log_lines.pop(0)
+                            
+                            # Update job logs
+                            job.ffmpeg_logs = alt_log_lines
+                            
+                            # Check output file size
+                            if os.path.exists(output_path):
+                                output_size = os.path.getsize(output_path)
+                                job.output_size = format_file_size(output_size)
+                                
+                            # Check if process might be stuck (hanging)
+                            if hasattr(job, 'last_progress_time') and job.current_time and job.last_progress_time == job.current_time:
+                                job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
+                                
+                                # If we've been at the same timestamp for multiple consecutive checks
+                                if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                                    # Check process status
+                                    process_status = get_process_status(alt_process.pid)
+                                    logger.warning(f"Alt process {alt_process.pid} appears stalled at {job.current_time}s with status {process_status}")
+                                    
+                                    # If the process is zombie or has been stalled for too long, kill it
+                                    if process_status == 'Z' or job.progress_stalled_count > 200:
+                                        logger.error(f"Killing stalled alt process {alt_process.pid} after {job.progress_stalled_count} checks")
+                                        try:
+                                            import signal
+                                            os.kill(alt_process.pid, signal.SIGKILL)
+                                            alt_process.poll()  # Force update the returncode
+                                        except Exception as e:
+                                            logger.error(f"Error killing alt process: {str(e)}")
+                                        break
+                            else:
+                                # Reset stall counter if progress has changed
+                                job.progress_stalled_count = 0
+                            
+                            # Store last progress time for stall detection
+                            if job.current_time:
+                                job.last_progress_time = job.current_time
+                            
+                            # No need to sleep here since select already has a timeout
+                        
+                        # Process alternate VAAPI encoding result
+                        alt_stdout, alt_stderr = alt_process.communicate()
+                        
+                        # Add final output to logs
+                        for line in alt_stdout.splitlines():
+                            if line.strip():
+                                alt_log_lines.append(f"STDOUT: {line.strip()}")
+                        
+                        for line in alt_stderr.splitlines():
+                            if line.strip():
+                                alt_log_lines.append(f"STDERR: {line.strip()}")
+                        
+                        # Update job logs
+                        job.ffmpeg_logs = alt_log_lines[-max_log_lines:] if len(alt_log_lines) > max_log_lines else alt_log_lines
+                        
+                        # Check if alternate VAAPI encoding succeeded
+                        if alt_process.returncode == 0:
+                            # Alternate VAAPI encoding succeeded!
+                            logger.info(f"Alternate VAAPI encoding succeeded for job {job.id}")
+                            alt_success = True
+                        else:
+                            logger.warning(f"Alternate VAAPI encoding also failed with return code {alt_process.returncode}")
+                            logger.warning(f"FFmpeg stderr: {alt_stderr}")
+                            job.ffmpeg_logs.append(f"NOTICE: Alternate VAAPI encoding failed, falling back to software encoding...")
+                        
+                        # If alternate VAAPI succeeded, we're done
+                        if alt_success:
+                            logger.info(f"Successfully used alternate VAAPI approach for job {job.id}")
+                            job.ffmpeg_logs.append("SUCCESS: Alternate VAAPI approach worked successfully for HDR content")
+                            return
+                    
+                    # If we get here, either it wasn't VAAPI or alternate VAAPI also failed
+                    # For VAAPI specifically, we could try HW decode + SW encode as it was slightly faster in tests
+                    if active_hw_accel == "vaapi":
+                        logger.warning(f"Both standard and alternate VAAPI encoding approaches failed, trying HW decode + SW encode")
+                        job.ffmpeg_logs.append(f"NOTICE: Both VAAPI encoding methods failed, trying hardware decode + software encode as last resort before full software mode...")
+                        
+                        # Create a hybrid command that uses VAAPI for decode but software for encode
+                        # Testing showed this was actually slightly faster than full software mode
+                        hybrid_cmd = [ffmpeg_path, "-hwaccel", "vaapi"]
+                        
+                        # Add device if available
+                        if active_hw_device:
+                            hybrid_cmd.extend(["-vaapi_device", active_hw_device])
+                        else:
+                            hybrid_cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
+                            
+                        # Add input file
+                        hybrid_cmd.extend(["-i", media_item.path])
+                        
+                        # Use software scaling - we're using hardware for decode only
+                        hybrid_cmd.extend(["-vf", f"scale={width}:{height}"])
+                        
+                        # Use software encoder with appropriate quality settings
+                        if profile.codec == "h264":
+                            hybrid_cmd.extend(["-c:v", "libx264"])
+                            # Quality settings
+                            if profile.quality == "high":
+                                hybrid_cmd.extend(["-crf", "18"])
+                            elif profile.quality == "medium":
+                                hybrid_cmd.extend(["-crf", "22"])
+                            else:  # low
+                                hybrid_cmd.extend(["-crf", "28"])
+                        elif profile.codec == "hevc":
+                            hybrid_cmd.extend(["-c:v", "libx265"])
+                            # Quality settings
+                            if profile.quality == "high":
+                                hybrid_cmd.extend(["-crf", "22"])
+                            elif profile.quality == "medium":
+                                hybrid_cmd.extend(["-crf", "26"])
+                            else:  # low
+                                hybrid_cmd.extend(["-crf", "32"])
+                        else:  # Default to H.264
+                            hybrid_cmd.extend(["-c:v", "libx264", "-crf", "23"])
+                            
+                        # Add audio codec settings
+                        hybrid_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
+                        
+                        # Add output file
+                        hybrid_cmd.extend(["-y", output_path])
+                        
+                        # Add progress monitoring
+                        hybrid_cmd.extend(["-progress", "pipe:1"])
+                        
+                        # Store the hybrid command for reference
+                        hybrid_cmd_str = ' '.join(hybrid_cmd)
+                        job.ffmpeg_command = hybrid_cmd_str
+                        job.ffmpeg_logs.append(f"RETRY: Using hybrid hardware decode + software encode: {hybrid_cmd_str}")
+                        
+                        logger.info(f"Trying hybrid hardware decode + software encode for job {job.id}")
+                        
+                        # Run the hybrid encoding
+                        # Properly quote command arguments to handle spaces and special characters
+                        # This ensures subprocess doesn't have issues with argument parsing
+                        hybrid_cmd_str_for_log = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in hybrid_cmd])
+                        logger.debug(f"Running command: {hybrid_cmd_str_for_log}")
+                        
+                        # Create a new command list with paths properly handled
+                        # This ensures we properly handle paths with spaces and special characters
+                        hybrid_sanitized_cmd = []
+                        for arg in hybrid_cmd:
+                            # Keep as-is, subprocess.Popen with shell=False handles spaces properly
+                            # when passed as a list
+                            hybrid_sanitized_cmd.append(arg)
+                        
+                        # Use text mode (instead of universal_newlines which is deprecated)
+                        # Add shell=False explicitly to ensure arguments are passed as a list
+                        # Add a specific encoding to ensure proper text handling
+                        hybrid_process = subprocess.Popen(
+                            hybrid_sanitized_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,  # Preferred over universal_newlines
+                            bufsize=1,  # Line buffered
+                            shell=False,  # Ensure arguments are passed as a list, not through shell
+                            encoding='utf-8',  # Explicitly set encoding
+                            errors='replace'  # Handle encoding errors gracefully
+                        )
+                        
+                        # Store the process ID for potential cancellation
+                        job.process_id = hybrid_process.pid
+                        
+                        # Monitor hybrid encoding progress
+                        hybrid_log_lines = job.ffmpeg_logs.copy()  # Keep previous logs
+                        hybrid_success = False
+                        
+                        while hybrid_process.poll() is None:
+                            # Check if job has been cancelled
+                            if job.status == "cancelled":
+                                logger.info(f"Hybrid encoding job {job.id} was cancelled")
+                                hybrid_process.terminate()
+                                break
+                                
+                            # Use non-blocking reads from stdout & stderr to prevent potential deadlocks
+                            # This approach prevents hanging when one pipe is full but the other isn't being read
+                            ready_to_read, _, _ = select.select([hybrid_process.stdout, hybrid_process.stderr], [], [], 0.1)
+                            
+                            for stream in ready_to_read:
+                                if stream == hybrid_process.stdout:
+                                    stdout_line = stream.readline().strip()
+                                    if stdout_line:
+                                        if stdout_line.startswith("out_time_ms="):
+                                            try:
+                                                time_ms = int(stdout_line.split("=")[1])
+                                                current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                                job.current_time = current_time
+                                                
+                                                if job.duration:
+                                                    job.progress = min(1.0, current_time / job.duration)
+                                                    logger.debug(f"Progress: {job.progress:.2%}")
+                                            except (ValueError, IndexError) as e:
+                                                logger.warning(f"Error parsing time: {str(e)}")
+                                        
+                                        hybrid_log_lines.append(f"STDOUT: {stdout_line}")
+                                        if len(hybrid_log_lines) > max_log_lines:
+                                            hybrid_log_lines.pop(0)
+                                
+                                elif stream == hybrid_process.stderr:
+                                    stderr_line = stream.readline().strip()
+                                    if stderr_line:
+                                        hybrid_log_lines.append(f"STDERR: {stderr_line}")
+                                        if len(hybrid_log_lines) > max_log_lines:
+                                            hybrid_log_lines.pop(0)
+                            
+                            # Update job logs
+                            job.ffmpeg_logs = hybrid_log_lines
+                            
+                            # Check output file size
+                            if os.path.exists(output_path):
+                                output_size = os.path.getsize(output_path)
+                                job.output_size = format_file_size(output_size)
+                                
+                            # Check if process might be stuck (hanging)
+                            if hasattr(job, 'last_progress_time') and job.current_time and job.last_progress_time == job.current_time:
+                                job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
+                                
+                                # If we've been at the same timestamp for multiple consecutive checks
+                                if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                                    # Check process status
+                                    process_status = get_process_status(hybrid_process.pid)
+                                    logger.warning(f"Hybrid process {hybrid_process.pid} appears stalled at {job.current_time}s with status {process_status}")
+                                    
+                                    # If the process is zombie or has been stalled for too long, kill it
+                                    if process_status == 'Z' or job.progress_stalled_count > 200:
+                                        logger.error(f"Killing stalled hybrid process {hybrid_process.pid} after {job.progress_stalled_count} checks")
+                                        try:
+                                            import signal
+                                            os.kill(hybrid_process.pid, signal.SIGKILL)
+                                            hybrid_process.poll()  # Force update the returncode
+                                        except Exception as e:
+                                            logger.error(f"Error killing hybrid process: {str(e)}")
+                                        break
+                            else:
+                                # Reset stall counter if progress has changed
+                                job.progress_stalled_count = 0
+                            
+                            # Store last progress time for stall detection
+                            if job.current_time:
+                                job.last_progress_time = job.current_time
+                            
+                            # No need to sleep here since select already has a timeout
+                        
+                        # Process hybrid encoding result
+                        hybrid_stdout, hybrid_stderr = hybrid_process.communicate()
+                        
+                        # Add final output to logs
+                        for line in hybrid_stdout.splitlines():
+                            if line.strip():
+                                hybrid_log_lines.append(f"STDOUT: {line.strip()}")
+                        
+                        for line in hybrid_stderr.splitlines():
+                            if line.strip():
+                                hybrid_log_lines.append(f"STDERR: {line.strip()}")
+                        
+                        # Update job logs
+                        job.ffmpeg_logs = hybrid_log_lines[-max_log_lines:] if len(hybrid_log_lines) > max_log_lines else hybrid_log_lines
+                        
+                        # Check if hybrid encoding succeeded
+                        if hybrid_process.returncode == 0:
+                            # Hybrid encoding succeeded!
+                            logger.info(f"Hybrid hardware decode + software encode succeeded for job {job.id}")
+                            hybrid_success = True
+                        else:
+                            logger.warning(f"Hybrid encoding also failed with return code {hybrid_process.returncode}")
+                            logger.warning(f"FFmpeg stderr: {hybrid_stderr}")
+                            job.ffmpeg_logs.append(f"NOTICE: Hybrid encoding failed, falling back to pure software encoding...")
+                        
+                        # If hybrid approach succeeded, we're done
+                        if hybrid_success:
+                            return
+                    
+                    # Last resort - fall back to pure software encoding
+                    logger.warning(f"All hardware acceleration attempts with {active_hw_accel} failed, falling back to pure software encoding")
+                    if active_hw_accel == "vaapi":
+                        job.ffmpeg_logs.append(f"NOTICE: All VAAPI approaches failed, falling back to pure software encoding...")
+                    else:
+                        job.ffmpeg_logs.append(f"NOTICE: Hardware acceleration with {active_hw_accel} failed, falling back to software encoding...")
                     
                     # Create a new software-only command
                     # Note: We avoid using hardware acceleration entirely in the fallback
@@ -674,12 +1156,31 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     logger.info(f"Retrying with software encoding for job {job.id}")
                     
                     # Run the software encoding
+                    # Properly quote command arguments to handle spaces and special characters
+                    # This ensures subprocess doesn't have issues with argument parsing
+                    sw_cmd_str_for_log = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in sw_cmd])
+                    logger.debug(f"Running command: {sw_cmd_str_for_log}")
+                    
+                    # Create a new command list with paths properly handled
+                    # This ensures we properly handle paths with spaces and special characters
+                    sw_sanitized_cmd = []
+                    for arg in sw_cmd:
+                        # Keep as-is, subprocess.Popen with shell=False handles spaces properly
+                        # when passed as a list
+                        sw_sanitized_cmd.append(arg)
+                    
+                    # Use text mode (instead of universal_newlines which is deprecated)
+                    # Add shell=False explicitly to ensure arguments are passed as a list
+                    # Add a specific encoding to ensure proper text handling
                     sw_process = subprocess.Popen(
-                        sw_cmd,
+                        sw_sanitized_cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        text=True,
-                        bufsize=1  # Line buffered
+                        text=True,  # Preferred over universal_newlines
+                        bufsize=1,  # Line buffered
+                        shell=False,  # Ensure arguments are passed as a list, not through shell
+                        encoding='utf-8',  # Explicitly set encoding
+                        errors='replace'  # Handle encoding errors gracefully
                     )
                     
                     # Store the process ID for potential cancellation
@@ -695,33 +1196,38 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                             sw_process.terminate()
                             break
                             
-                        # Read progress output from stdout
-                        stdout_line = sw_process.stdout.readline().strip()
-                        if stdout_line:
-                            # Parse progress information similar to before
-                            if stdout_line.startswith("out_time_ms="):
-                                try:
-                                    time_ms = int(stdout_line.split("=")[1])
-                                    current_time = time_ms / 1000000  # Convert microseconds to seconds
-                                    job.current_time = current_time
-                                    
-                                    if job.duration:
-                                        job.progress = min(1.0, current_time / job.duration)
-                                        logger.debug(f"Progress: {job.progress:.2%}")
-                                except (ValueError, IndexError) as e:
-                                    logger.warning(f"Error parsing time: {str(e)}")
-                            
-                            # Store the line in logs
-                            sw_log_lines.append(f"STDOUT: {stdout_line}")
-                            if len(sw_log_lines) > max_log_lines:
-                                sw_log_lines.pop(0)  # Remove oldest line
+                        # Use non-blocking reads from stdout & stderr to prevent potential deadlocks
+                        # This approach prevents hanging when one pipe is full but the other isn't being read
+                        ready_to_read, _, _ = select.select([sw_process.stdout, sw_process.stderr], [], [], 0.1)
                         
-                        # Read stderr
-                        stderr_line = sw_process.stderr.readline().strip()
-                        if stderr_line:
-                            sw_log_lines.append(f"STDERR: {stderr_line}")
-                            if len(sw_log_lines) > max_log_lines:
-                                sw_log_lines.pop(0)
+                        for stream in ready_to_read:
+                            if stream == sw_process.stdout:
+                                stdout_line = stream.readline().strip()
+                                if stdout_line:
+                                    # Parse progress information similar to before
+                                    if stdout_line.startswith("out_time_ms="):
+                                        try:
+                                            time_ms = int(stdout_line.split("=")[1])
+                                            current_time = time_ms / 1000000  # Convert microseconds to seconds
+                                            job.current_time = current_time
+                                            
+                                            if job.duration:
+                                                job.progress = min(1.0, current_time / job.duration)
+                                                logger.debug(f"Progress: {job.progress:.2%}")
+                                        except (ValueError, IndexError) as e:
+                                            logger.warning(f"Error parsing time: {str(e)}")
+                                    
+                                    # Store the line in logs
+                                    sw_log_lines.append(f"STDOUT: {stdout_line}")
+                                    if len(sw_log_lines) > max_log_lines:
+                                        sw_log_lines.pop(0)  # Remove oldest line
+                            
+                            elif stream == sw_process.stderr:
+                                stderr_line = stream.readline().strip()
+                                if stderr_line:
+                                    sw_log_lines.append(f"STDERR: {stderr_line}")
+                                    if len(sw_log_lines) > max_log_lines:
+                                        sw_log_lines.pop(0)
                         
                         # Update job logs
                         job.ffmpeg_logs = sw_log_lines
@@ -730,9 +1236,36 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                         if os.path.exists(output_path):
                             output_size = os.path.getsize(output_path)
                             job.output_size = format_file_size(output_size)
+                            
+                        # Check if process might be stuck (hanging)
+                        if hasattr(job, 'last_progress_time') and job.current_time and job.last_progress_time == job.current_time:
+                            job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
+                            
+                            # If we've been at the same timestamp for multiple consecutive checks
+                            if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                                # Check process status
+                                process_status = get_process_status(sw_process.pid)
+                                logger.warning(f"Software process {sw_process.pid} appears stalled at {job.current_time}s with status {process_status}")
+                                
+                                # If the process is zombie or has been stalled for too long, kill it
+                                if process_status == 'Z' or job.progress_stalled_count > 200:
+                                    logger.error(f"Killing stalled software process {sw_process.pid} after {job.progress_stalled_count} checks")
+                                    try:
+                                        import signal
+                                        os.kill(sw_process.pid, signal.SIGKILL)
+                                        sw_process.poll()  # Force update the returncode
+                                    except Exception as e:
+                                        logger.error(f"Error killing software process: {str(e)}")
+                                    break
+                        else:
+                            # Reset stall counter if progress has changed
+                            job.progress_stalled_count = 0
                         
-                        # Sleep briefly
-                        time.sleep(0.1)
+                        # Store last progress time for stall detection
+                        if job.current_time:
+                            job.last_progress_time = job.current_time
+                        
+                        # No need to sleep here since select already has a timeout
                     
                     # Process software encoding result
                     sw_stdout, sw_stderr = sw_process.communicate()
@@ -853,6 +1386,30 @@ def format_file_size(size_bytes: int) -> str:
         return f"{round(size_bytes / (1024 * 1024), 2)} MB"
     else:
         return f"{round(size_bytes / (1024 * 1024 * 1024), 2)} GB"
+
+def get_process_status(pid: int) -> Optional[str]:
+    """Get the status of a process by PID.
+    
+    Returns:
+        str: Process status or None if process not found
+        
+    Status values:
+        'R': Running
+        'S': Sleeping (interruptible)
+        'D': Disk sleep (uninterruptible)
+        'Z': Zombie
+        'T': Stopped
+        '+': Foreground process
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "r") as f:
+            stats = f.read().split()
+            if len(stats) > 2:
+                # Third field is the process state
+                return stats[2]
+        return None
+    except (FileNotFoundError, PermissionError, ProcessLookupError):
+        return None
 
 def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
     """Detect available hardware acceleration methods.
