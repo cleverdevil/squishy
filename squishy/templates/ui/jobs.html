@@ -33,8 +33,10 @@
                 <td>
                     {% if item.job.status == "processing" %}
                     <div class="progress-container">
-                        <progress value="{{ item.job.progress }}" max="1.0"></progress>
-                        <span class="progress-text">{{ (item.job.progress * 100)|int }}%</span>
+                        <div class="progress-bar-row">
+                            <progress value="{{ item.job.progress }}" max="1.0"></progress>
+                            <span class="progress-text">{{ (item.job.progress * 100)|int }}%</span>
+                        </div>
                         {% if item.job.current_time and item.job.duration %}
                         <span class="progress-time">{{ item.job.current_time|int }}s / {{ item.job.duration|int }}s</span>
                         {% endif %}

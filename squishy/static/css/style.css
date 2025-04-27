@@ -361,8 +361,9 @@ tbody tr:hover {
 
 progress {
   width: 100%;
-  height: 12px;
-  border-radius: 6px;
+  height: 8px;
+  border-radius: 4px;
+  flex-grow: 1;
 }
 
 .status-complete {
@@ -392,6 +393,10 @@ progress {
 .empty-state p {
   color: #777;
   font-size: 1.1rem;
+}
+
+.jobs-list table td:last-child form {
+  width: auto;
 }
 
 /* Footer */
@@ -785,17 +790,27 @@ hr {
 .progress-container {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+}
+
+.progress-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .progress-text {
   font-size: 0.8rem;
   color: var(--dark-color);
+  font-weight: 500;
+  min-width: 3.5em;
+  text-align: right;
 }
 
 .progress-time {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--secondary-color);
+  font-family: monospace;
 }
 
 .output-size {
