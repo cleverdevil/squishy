@@ -396,6 +396,20 @@ def get_show(show_id: str) -> Optional[TVShow]:
     return TV_SHOWS.get(show_id)
 
 def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
-    """Get all TV shows and movies."""
-    movies = [item for item in MEDIA.values() if item.type == "movie"]
-    return list(TV_SHOWS.values()), movies
+    """
+    Get all TV shows and movies.
+    
+    Filters out:
+    - TV shows with no episodes
+    - Movies with no video file (missing path)
+    """
+    # Filter TV shows to only include those with episodes
+    shows_with_episodes = [show for show in TV_SHOWS.values() if show.episodes]
+    
+    # Filter movies to only include those with a valid path
+    valid_movies = [
+        item for item in MEDIA.values() 
+        if item.type == "movie" and item.path and os.path.exists(item.path)
+    ]
+    
+    return shows_with_episodes, valid_movies
