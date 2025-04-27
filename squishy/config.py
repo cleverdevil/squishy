@@ -42,6 +42,7 @@ class Config:
     plex_token: Optional[str] = None
     path_mappings: Dict[str, str] = None
     profiles: Dict[str, TranscodeProfile] = None
+    max_concurrent_jobs: int = 1  # Default to 1 concurrent job
     
     def __post_init__(self):
         """Ensure dictionaries are initialized."""
@@ -132,6 +133,7 @@ def load_config(config_path: str = None) -> Config:
         plex_token=config_data.get("plex_token"),
         path_mappings=path_mappings,
         profiles=profiles,
+        max_concurrent_jobs=config_data.get("max_concurrent_jobs", 1),
     )
 
 def save_config(config: Config, config_path: str = None) -> None:
@@ -157,7 +159,8 @@ def save_config(config: Config, config_path: str = None) -> None:
         "transcode_path": config.transcode_path,
         "ffmpeg_path": config.ffmpeg_path,
         "profiles": profiles_data,
-        "path_mappings": config.path_mappings
+        "path_mappings": config.path_mappings,
+        "max_concurrent_jobs": config.max_concurrent_jobs
     }
     
     # Only include one source configuration

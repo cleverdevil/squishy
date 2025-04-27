@@ -208,6 +208,8 @@ def browse_filesystem():
         return jsonify({
             "error": f"Could not access directory: {str(e)}"
         }), 400
+
+
 @admin_bp.route("/update_path_mappings", methods=["POST"])
 def update_path_mappings():
     """Update path mapping configuration."""
@@ -228,6 +230,8 @@ def update_path_mappings():
     save_config(config)
     flash("Path mapping updated")
     return redirect(url_for("admin.index"))
+
+
 @admin_bp.route("/update_paths_and_mapping", methods=["POST"])
 def update_paths_and_mapping():
     """Update both path configuration and path mapping."""
@@ -238,6 +242,14 @@ def update_paths_and_mapping():
     transcode_path = request.form["transcode_path"].strip()
     ffmpeg_path = request.form["ffmpeg_path"].strip()
     
+    # Get max concurrent jobs
+    try:
+        max_concurrent_jobs = int(request.form["max_concurrent_jobs"])
+        if max_concurrent_jobs < 1:
+            max_concurrent_jobs = 1
+    except (ValueError, KeyError):
+        max_concurrent_jobs = 1
+    
     # Get source and target paths for mapping
     source_path = request.form.get("source_path", "").strip()
     target_path = request.form.get("target_path", "").strip()
@@ -246,6 +258,7 @@ def update_paths_and_mapping():
     config.media_path = media_path
     config.transcode_path = transcode_path
     config.ffmpeg_path = ffmpeg_path
+    config.max_concurrent_jobs = max_concurrent_jobs
     
     # Create new path mappings dictionary
     path_mappings = {}

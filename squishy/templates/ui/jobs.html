@@ -24,7 +24,12 @@
                 <td>{{ item.media_title }}</td>
                 <td>{{ item.file_size }}</td>
                 <td>{{ item.job.profile_name }}</td>
-                <td class="status-{{ item.job.status }}">{{ item.job.status }}</td>
+                <td class="status-{{ item.job.status }}">
+                    {{ item.job.status }}
+                    {% if item.job.status == "pending" and loop.index0 > 0 %}
+                    <span class="queue-position">(Queue position: {{ loop.index0 }})</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if item.job.status == "processing" %}
                     <div class="progress-container">
@@ -50,7 +55,7 @@
                     {% if item.job.output_size %}
                     <span class="output-size">({{ item.job.output_size }})</span>
                     {% endif %}
-                    {% elif item.job.status == "processing" %}
+                    {% elif item.job.status == "processing" or item.job.status == "pending" %}
                     <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
                         <button type="submit" class="cancel-button">Cancel</button>
                     </form>

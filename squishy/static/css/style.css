@@ -932,3 +932,9 @@ hr {
 .download-button:hover {
   background-color: var(--primary-dark-color);
 }
+/* Queue position styling */
+.queue-position {
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  margin-left: 0.5rem;
+}
