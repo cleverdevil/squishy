@@ -13,6 +13,7 @@ from typing import Dict, Optional, Tuple, List, Callable, Any
 
 from squishy.config import TranscodeProfile, load_config
 from squishy.models import TranscodeJob, MediaItem
+from squishy.scanner import get_media
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -49,16 +50,32 @@ def get_job(job_id: str) -> Optional[TranscodeJob]:
     logger.debug(f"Getting job with id={job_id}")
     return JOBS.get(job_id)
 
+def get_running_job_count():
+    """Get the number of currently running jobs."""
+    return len([j for j in JOBS.values() if j.status == "processing"])
+
+def get_pending_jobs():
+    """Get a list of all pending jobs from the JOBS dictionary."""
+    return [j for j in JOBS.values() if j.status == "pending"]
+
 def process_job_queue():
     """Process the job queue based on the concurrency limit."""
     config = load_config()
     max_jobs = config.max_concurrent_jobs
     
     # Check if we can start more jobs
-    current_running = len([j for j in JOBS.values() if j.status == "processing"])
+    current_running = get_running_job_count()
     available_slots = max(0, max_jobs - current_running)
     
+    logger.debug(f"Processing job queue: current_running={current_running}, max_jobs={max_jobs}, available_slots={available_slots}, queue_length={len(JOB_QUEUE)}")
+    
+    # Also check for any pending jobs in the JOBS dictionary that might not be in the queue
+    pending_jobs = get_pending_jobs()
+    logger.debug(f"Found {len(pending_jobs)} pending jobs in the JOBS dictionary")
+    
+    # First handle jobs in the JOB_QUEUE
     if available_slots > 0 and JOB_QUEUE:
+        logger.debug(f"Starting up to {available_slots} jobs from queue")
         # Get the next job(s) from the queue
         jobs_to_start = min(available_slots, len(JOB_QUEUE))
         for _ in range(jobs_to_start):
@@ -71,9 +88,51 @@ def process_job_queue():
             profile = job_data["profile"]
             output_dir = job_data["output_dir"]
             
+            job = get_job(job_id)
+            if job and job.status == "pending":
+                # Start the job
+                _start_transcode_job(job, media_item, profile, output_dir)
+                logger.info(f"Started queued job {job_id}, {len(JOB_QUEUE)} jobs remaining in queue")
+                available_slots -= 1
+            else:
+                logger.warning(f"Job {job_id} in queue is not in pending state or doesn't exist anymore")
+    
+    # If we still have available slots and there are pending jobs not in the queue,
+    # we need to find the media items and profiles to start them
+    if available_slots > 0 and pending_jobs:
+        logger.debug(f"Looking for pending jobs not in the queue: available_slots={available_slots}, pending_jobs={len(pending_jobs)}")
+        
+        # Get the list of job IDs already in the queue
+        queued_job_ids = [job_data["job_id"] for job_data in JOB_QUEUE]
+        
+        # Find the pending jobs not in the queue
+        for job in pending_jobs:
+            # Skip if job is already in the queue
+            if job.id in queued_job_ids:
+                continue
+                
+            # Get the media item and profile
+            config = load_config()
+            
+            media_item = get_media(job.media_id)
+            if not media_item:
+                logger.warning(f"Media item {job.media_id} for pending job {job.id} not found")
+                continue
+                
+            if job.profile_name not in config.profiles:
+                logger.warning(f"Profile {job.profile_name} for pending job {job.id} not found")
+                continue
+                
+            profile = config.profiles[job.profile_name]
+            output_dir = config.transcode_path
+            
             # Start the job
-            _start_transcode_job(get_job(job_id), media_item, profile, output_dir)
-            logger.info(f"Started queued job {job_id}, {len(JOB_QUEUE)} jobs remaining in queue")
+            _start_transcode_job(job, media_item, profile, output_dir)
+            logger.info(f"Started pending job {job.id} that was not in queue")
+            
+            available_slots -= 1
+            if available_slots <= 0:
+                break
 
 def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str):
     """Start or queue a transcoding job based on concurrency limits."""
@@ -85,7 +144,7 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
     max_jobs = config.max_concurrent_jobs
     
     # Check if we can start the job immediately
-    current_running = len([j for j in JOBS.values() if j.status == "processing"])
+    current_running = get_running_job_count()
     
     if current_running < max_jobs:
         # Start the job immediately

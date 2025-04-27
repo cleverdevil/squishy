@@ -14,7 +14,7 @@ from flask import (
 
 from squishy.config import load_config, save_config, TranscodeProfile, Config
 from squishy.scanner import scan_filesystem, scan_jellyfin, scan_plex
-from squishy.transcoder import detect_hw_accel
+from squishy.transcoder import detect_hw_accel, process_job_queue, get_running_job_count
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -265,11 +265,15 @@ def update_paths_and_mapping():
     source_path = request.form.get("source_path", "").strip()
     target_path = request.form.get("target_path", "").strip()
     
+    # Check if the concurrent job limit changed
+    old_max_concurrent_jobs = config.max_concurrent_jobs
+    new_max_concurrent_jobs = max_concurrent_jobs
+    
     # Update config
     config.media_path = media_path
     config.transcode_path = transcode_path
     config.ffmpeg_path = ffmpeg_path
-    config.max_concurrent_jobs = max_concurrent_jobs
+    config.max_concurrent_jobs = new_max_concurrent_jobs
     
     # Update hardware acceleration settings
     hw_accel = request.form.get("hw_accel")
@@ -284,7 +288,35 @@ def update_paths_and_mapping():
     
     config.path_mappings = path_mappings
     
+    # Save config first so process_job_queue uses the updated max_concurrent_jobs
     save_config(config)
+    
+    # Check job queue if concurrent jobs limit changed
+    if new_max_concurrent_jobs != old_max_concurrent_jobs:
+        current_job_count = get_running_job_count()
+        
+        # Get pending job count for better messaging
+        from squishy.transcoder import get_pending_jobs, JOB_QUEUE
+        pending_jobs = get_pending_jobs()
+        
+        if new_max_concurrent_jobs > old_max_concurrent_jobs:
+            # If limit was increased, process the queue to start pending jobs
+            current_app.logger.info(f"Concurrent job limit increased from {old_max_concurrent_jobs} to {new_max_concurrent_jobs}. Processing job queue with {len(pending_jobs)} pending jobs.")
+            
+            # Process the job queue immediately
+            process_job_queue()
+            
+            if pending_jobs:
+                flash(f"Increased concurrent job limit to {new_max_concurrent_jobs}. Starting pending jobs ({len(pending_jobs)}).")
+            else:
+                flash(f"Increased concurrent job limit to {new_max_concurrent_jobs}. No pending jobs to start.")
+        elif new_max_concurrent_jobs < current_job_count:
+            # If limit was reduced and we have more running jobs than the new limit,
+            # we don't automatically cancel jobs, but inform the user
+            current_app.logger.info(f"Concurrent job limit decreased from {old_max_concurrent_jobs} to {new_max_concurrent_jobs}. Currently running {current_job_count} jobs.")
+            flash(f"Reduced concurrent job limit to {new_max_concurrent_jobs}. Currently running {current_job_count} jobs. New jobs will only start when current ones complete.")
+        else:
+            flash(f"Updated concurrent job limit to {new_max_concurrent_jobs}.")
     flash("Path configuration updated")
     return redirect(url_for("admin.index"))
 
