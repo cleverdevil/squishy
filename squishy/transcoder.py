@@ -54,10 +54,13 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
             job.status = "processing"
             logger.info(f"Job {job.id} status changed to processing")
             
-            # Create output filename
-            filename = f"{media_item.title}_{profile.name}.{profile.container}"
-            filename = filename.replace(" ", "_").replace(":", "_")
-            output_path = os.path.join(output_dir, filename)
+            # Get original filename without extension
+            original_filename = os.path.basename(media_item.path)
+            filename_without_ext, _ = os.path.splitext(original_filename)
+            
+            # Create output filename with profile name in parentheses
+            output_filename = f"{filename_without_ext} ({profile.name}).{profile.container}"
+            output_path = os.path.join(output_dir, output_filename)
             logger.debug(f"Output path: {output_path}")
             
             # Ensure output directory exists
