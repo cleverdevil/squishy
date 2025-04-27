@@ -831,7 +831,7 @@ hr {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
@@ -840,16 +840,21 @@ hr {
   position: relative;
   color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
 }
 
 .circle-button:hover {
   transform: scale(1.1);
 }
 
+.circle-button[title] {
+  position: relative;
+}
+
 .circle-button[title]:hover::after {
   content: attr(title);
   position: absolute;
-  bottom: -30px;
+  top: -35px;
   left: 50%;
   transform: translateX(-50%);
   background-color: rgba(0, 0, 0, 0.8);
@@ -858,7 +863,8 @@ hr {
   border-radius: 4px;
   font-size: 0.75rem;
   white-space: nowrap;
-  z-index: 10;
+  z-index: 100;
+  pointer-events: none;
 }
 
 .cancel-button {
