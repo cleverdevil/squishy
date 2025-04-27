@@ -9,7 +9,7 @@ import re
 import time
 import json
 import datetime
-from typing import Dict, Optional, Tuple, List, Callable
+from typing import Dict, Optional, Tuple, List, Callable, Any
 
 from squishy.config import TranscodeProfile, load_config
 from squishy.models import TranscodeJob, MediaItem
@@ -172,34 +172,235 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             raise ValueError(f"Invalid resolution format: {profile.resolution}")
         
         # Build ffmpeg command
-        cmd = [ffmpeg_path, "-i", media_item.path]
+        cmd = [ffmpeg_path]
         
-        # Add video codec and options
-        cmd.extend(["-vf", f"scale={width}:{height}"])
+        # Determine hardware acceleration settings (inherit global if not set in profile)
+        config = load_config()
+        active_hw_accel = None
+        active_hw_device = None
         
+        # If profile has explicit hw_accel (not inherited), use it
+        if profile.hw_accel and profile.hw_accel != "inherit":
+            logger.debug(f"Using profile-specific hardware acceleration: {profile.hw_accel}")
+            active_hw_accel = profile.hw_accel
+            active_hw_device = profile.hw_device
+        # Otherwise, if global hw_accel is set, use that
+        elif config.hw_accel:
+            logger.debug(f"Using global hardware acceleration: {config.hw_accel}")
+            active_hw_accel = config.hw_accel
+            active_hw_device = config.hw_device
+        
+        # Default to VAAPI if no acceleration specified
+        if not active_hw_accel:
+            active_hw_accel = "vaapi"
+            active_hw_device = "/dev/dri/renderD128"  # Default VAAPI device
+            logger.debug(f"Using default VAAPI hardware acceleration")
+        
+        # Add hardware acceleration options if available
+        has_hw_accel = False
+        if active_hw_accel:
+            logger.debug(f"Using hardware acceleration: {active_hw_accel}")
+            
+            # Add hardware acceleration flags
+            if active_hw_accel in ["cuda", "nvenc"]:
+                cmd.extend(["-hwaccel", "cuda"])
+                has_hw_accel = True
+                if active_hw_device:
+                    cmd.extend(["-hwaccel_device", active_hw_device])
+            elif active_hw_accel == "vaapi":
+                cmd.extend(["-hwaccel", "vaapi"])
+                
+                # Add VAAPI-specific options before input
+                if active_hw_device:
+                    cmd.extend(["-vaapi_device", active_hw_device])
+                else:
+                    # Use default VAAPI device
+                    cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
+                
+                # Add hwaccel output format before input for VAAPI
+                cmd.extend(["-hwaccel_output_format", "vaapi"])
+                
+                has_hw_accel = True
+            elif active_hw_accel == "videotoolbox":
+                cmd.extend(["-hwaccel", "videotoolbox"])
+                has_hw_accel = True
+            elif active_hw_accel == "amf":
+                cmd.extend(["-hwaccel", "amf"])
+                has_hw_accel = True
+            else:
+                # QSV and other non-working methods fall back to VAAPI on this system
+                logger.warning(f"Hardware acceleration method {active_hw_accel} may not be compatible, trying VAAPI instead")
+                cmd.extend(["-hwaccel", "vaapi"])
+                cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
+                cmd.extend(["-hwaccel_output_format", "vaapi"])
+                active_hw_accel = "vaapi"
+                has_hw_accel = True
+        
+        # Add input file
+        cmd.extend(["-i", media_item.path])
+        
+        # Add video scaling filter
+        if active_hw_accel == "vaapi":
+            # VAAPI hardware scaling - more efficient
+            cmd.extend([
+                "-vf", f"scale_vaapi=w={width}:h={height}"
+            ])
+        elif active_hw_accel in ["cuda", "nvenc"]:
+            # CUDA hardware scaling - more efficient 
+            cmd.extend([
+                "-vf", f"scale_cuda=w={width}:h={height}"
+            ])
+        else:
+            # Software scaling
+            cmd.extend(["-vf", f"scale={width}:{height}"])
+        
+        # Add video codec and options based on codec and hardware accel
         if profile.codec == "h264":
-            logger.debug("Using h264 codec (libx264)")
-            cmd.extend(["-c:v", "libx264"])
-            if profile.quality == "high":
-                crf = "18"
-            elif profile.quality == "medium":
-                crf = "22"
-            else:  # low
-                crf = "28"
-            logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
-            cmd.extend(["-crf", crf])
+            if active_hw_accel == "nvenc":
+                logger.debug("Using h264 codec with NVENC")
+                cmd.extend(["-c:v", "h264_nvenc"])
+                # Use presets instead of CRF for NVENC
+                if profile.quality == "high":
+                    preset = "p7"  # Highest quality for NVENC
+                elif profile.quality == "medium":
+                    preset = "p5"
+                else:  # low
+                    preset = "p3"
+                cmd.extend(["-preset", preset])
+            elif active_hw_accel == "qsv":
+                logger.debug("Using h264 codec with QSV")
+                cmd.extend(["-c:v", "h264_qsv"])
+                
+                # Set QSV parameters
+                if profile.quality == "high":
+                    bitrate = "5M"
+                elif profile.quality == "medium":
+                    bitrate = "3M"
+                else:  # low
+                    bitrate = "1.5M"
+                
+                # Use bitrate control and simpler params for better compatibility
+                cmd.extend(["-b:v", bitrate, "-maxrate", bitrate])
+            elif active_hw_accel == "vaapi":
+                logger.debug("Using h264 codec with VAAPI")
+                cmd.extend(["-c:v", "h264_vaapi"])
+                
+                # VAAPI quality targets
+                if profile.quality == "high":
+                    cmd.extend(["-qp", "18"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-qp", "23"])
+                else:  # low
+                    cmd.extend(["-qp", "28"])
+                    
+                # Add low_power setting for faster encoding (1=disabled, 0=enabled)
+                cmd.extend(["-low_power", "1"])
+            elif active_hw_accel == "videotoolbox":
+                logger.debug("Using h264 codec with VideoToolbox")
+                cmd.extend(["-c:v", "h264_videotoolbox"])
+                # VideoToolbox quality
+                if profile.quality == "high":
+                    cmd.extend(["-q:v", "50"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-q:v", "70"])
+                else:  # low
+                    cmd.extend(["-q:v", "90"])
+            elif active_hw_accel == "amf":
+                logger.debug("Using h264 codec with AMF")
+                cmd.extend(["-c:v", "h264_amf"])
+                # AMF quality settings
+                if profile.quality == "high":
+                    cmd.extend(["-quality", "quality", "-qp_i", "18", "-qp_p", "20"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-quality", "balanced", "-qp_i", "22", "-qp_p", "24"])
+                else:  # low
+                    cmd.extend(["-quality", "speed", "-qp_i", "26", "-qp_p", "28"])
+            else:
+                # Software encoding
+                logger.debug("Using h264 codec (libx264)")
+                cmd.extend(["-c:v", "libx264"])
+                if profile.quality == "high":
+                    crf = "18"
+                elif profile.quality == "medium":
+                    crf = "22"
+                else:  # low
+                    crf = "28"
+                logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
+                cmd.extend(["-crf", crf])
         elif profile.codec == "hevc":
-            logger.debug("Using HEVC codec (libx265)")
-            cmd.extend(["-c:v", "libx265"])
-            if profile.quality == "high":
-                crf = "22"
-            elif profile.quality == "medium":
-                crf = "26"
-            else:  # low
-                crf = "32"
-            logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
-            cmd.extend(["-crf", crf])
+            if active_hw_accel == "nvenc":
+                logger.debug("Using HEVC codec with NVENC")
+                cmd.extend(["-c:v", "hevc_nvenc"])
+                # Use presets instead of CRF for NVENC
+                if profile.quality == "high":
+                    preset = "p7"  # Highest quality for NVENC
+                elif profile.quality == "medium":
+                    preset = "p5"
+                else:  # low
+                    preset = "p3"
+                cmd.extend(["-preset", preset])
+            elif active_hw_accel == "qsv":
+                logger.debug("Using HEVC codec with QSV")
+                cmd.extend(["-c:v", "hevc_qsv"])
+                
+                # Set QSV parameters
+                if profile.quality == "high":
+                    bitrate = "4M"
+                elif profile.quality == "medium":
+                    bitrate = "2.5M"
+                else:  # low
+                    bitrate = "1M"
+                
+                # Use bitrate control and simpler params for better compatibility
+                cmd.extend(["-b:v", bitrate, "-maxrate", bitrate])
+            elif active_hw_accel == "vaapi":
+                logger.debug("Using HEVC codec with VAAPI")
+                cmd.extend(["-c:v", "hevc_vaapi"])
+                
+                # VAAPI quality targets
+                if profile.quality == "high":
+                    cmd.extend(["-qp", "22"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-qp", "26"])
+                else:  # low
+                    cmd.extend(["-qp", "32"])
+                    
+                # Add low_power setting for faster encoding (1=disabled, 0=enabled)
+                cmd.extend(["-low_power", "1"])
+            elif active_hw_accel == "videotoolbox":
+                logger.debug("Using HEVC codec with VideoToolbox")
+                cmd.extend(["-c:v", "hevc_videotoolbox"])
+                # VideoToolbox quality
+                if profile.quality == "high":
+                    cmd.extend(["-q:v", "50"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-q:v", "70"])
+                else:  # low
+                    cmd.extend(["-q:v", "90"])
+            elif active_hw_accel == "amf":
+                logger.debug("Using HEVC codec with AMF")
+                cmd.extend(["-c:v", "hevc_amf"])
+                # AMF quality settings
+                if profile.quality == "high":
+                    cmd.extend(["-quality", "quality", "-qp_i", "22", "-qp_p", "24"])
+                elif profile.quality == "medium":
+                    cmd.extend(["-quality", "balanced", "-qp_i", "26", "-qp_p", "28"])
+                else:  # low
+                    cmd.extend(["-quality", "speed", "-qp_i", "30", "-qp_p", "32"])
+            else:
+                # Software encoding
+                logger.debug("Using HEVC codec (libx265)")
+                cmd.extend(["-c:v", "libx265"])
+                if profile.quality == "high":
+                    crf = "22"
+                elif profile.quality == "medium":
+                    crf = "26"
+                else:  # low
+                    crf = "32"
+                logger.debug(f"Setting CRF to {crf} for {profile.quality} quality")
+                cmd.extend(["-crf", crf])
         elif profile.codec == "av1":
+            # Currently no HW acceleration support for AV1 encoding
             logger.debug("Using AV1 codec (libsvtav1)")
             cmd.extend(["-c:v", "libsvtav1"])
             if profile.quality == "high":
@@ -240,8 +441,12 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
         # Add progress monitoring
         cmd.extend(["-progress", "pipe:1"])
         
+        # Store the command for reference
+        ffmpeg_command_str = ' '.join(cmd)
+        job.ffmpeg_command = ffmpeg_command_str
+        
         # Log the command
-        logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+        logger.debug(f"FFmpeg command: {ffmpeg_command_str}")
         
         # Run the transcoding
         logger.info(f"Starting FFmpeg process for job {job.id}")
@@ -258,6 +463,10 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             job.process_id = process.pid
             logger.debug(f"Process ID for job {job.id}: {job.process_id}")
             
+            # Create a queue for log lines
+            log_lines = []
+            max_log_lines = 1000  # Limit the number of log lines to store
+            
             # Monitor progress
             while process.poll() is None:
                 # Check if job has been cancelled
@@ -266,13 +475,13 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     process.terminate()
                     break
                     
-                # Read progress output
-                line = process.stdout.readline().strip()
-                if line:
+                # Read progress output from stdout
+                stdout_line = process.stdout.readline().strip()
+                if stdout_line:
                     # Parse progress information
-                    if line.startswith("out_time_ms="):
+                    if stdout_line.startswith("out_time_ms="):
                         try:
-                            time_ms = int(line.split("=")[1])
+                            time_ms = int(stdout_line.split("=")[1])
                             current_time = time_ms / 1000000  # Convert microseconds to seconds
                             job.current_time = current_time
                             
@@ -281,6 +490,22 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                                 logger.debug(f"Progress: {job.progress:.2%}")
                         except (ValueError, IndexError) as e:
                             logger.warning(f"Error parsing time: {str(e)}")
+                    
+                    # Store the line in logs
+                    log_lines.append(f"STDOUT: {stdout_line}")
+                    if len(log_lines) > max_log_lines:
+                        log_lines.pop(0)  # Remove oldest line if we exceed limit
+                
+                # Read stderr for logging
+                stderr_line = process.stderr.readline().strip()
+                if stderr_line:
+                    # Store the line in logs
+                    log_lines.append(f"STDERR: {stderr_line}")
+                    if len(log_lines) > max_log_lines:
+                        log_lines.pop(0)  # Remove oldest line if we exceed limit
+                
+                # Update job logs
+                job.ffmpeg_logs = log_lines
                 
                 # Check output file size
                 if os.path.exists(output_path):
@@ -288,7 +513,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     job.output_size = format_file_size(output_size)
                 
                 # Sleep briefly to avoid high CPU usage
-                time.sleep(1)
+                time.sleep(0.1)
             
             # Check if job was cancelled
             if job.status == "cancelled":
@@ -297,6 +522,18 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             
             # Get the final output
             stdout, stderr = process.communicate()
+            
+            # Add final output to logs
+            for line in stdout.splitlines():
+                if line.strip():
+                    log_lines.append(f"STDOUT: {line.strip()}")
+            
+            for line in stderr.splitlines():
+                if line.strip():
+                    log_lines.append(f"STDERR: {line.strip()}")
+            
+            # Update job logs one last time
+            job.ffmpeg_logs = log_lines[-max_log_lines:] if len(log_lines) > max_log_lines else log_lines
             
             if process.returncode != 0:
                 logger.error(f"FFmpeg process failed with return code {process.returncode}")
@@ -348,11 +585,20 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
             job.status = "failed"
             job.error_message = str(e)
+            
+            # Make sure to capture final error messages in logs
+            if hasattr(e, 'stderr') and e.stderr:
+                for line in e.stderr.splitlines():
+                    if line.strip():
+                        job.ffmpeg_logs.append(f"STDERR: {line.strip()}")
     
     except Exception as e:
         logger.error(f"Error in transcoding job {job.id}: {str(e)}", exc_info=True)
         job.status = "failed"
         job.error_message = str(e)
+        
+        # Add error to logs
+        job.ffmpeg_logs.append(f"ERROR: {str(e)}")
 
 def get_media_duration(ffmpeg_path: str, input_path: str) -> Optional[float]:
     """Get the duration of a media file in seconds."""
@@ -386,6 +632,128 @@ def format_file_size(size_bytes: int) -> str:
         return f"{round(size_bytes / (1024 * 1024), 2)} MB"
     else:
         return f"{round(size_bytes / (1024 * 1024 * 1024), 2)} GB"
+
+def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
+    """Detect available hardware acceleration methods.
+    
+    Returns:
+        Dict containing available HW acceleration methods and devices.
+    """
+    result = {
+        "methods": [],
+        "devices": {
+            "cuda": [],
+            "vaapi": [],
+            "qsv": [],
+            "videotoolbox": [],
+            "d3d11va": [],
+            "dxva2": [],
+            "opencl": [],
+            "amf": [],
+        },
+        "recommended": {
+            "method": "",
+            "device": ""
+        }
+    }
+    
+    logger.info("Detecting available hardware acceleration methods...")
+    
+    # Check FFmpeg version and codecs
+    try:
+        # Get FFmpeg version info
+        version_cmd = [ffmpeg_path, "-version"]
+        version_output = subprocess.check_output(version_cmd, stderr=subprocess.STDOUT, text=True)
+        logger.debug(f"FFmpeg version: {version_output.splitlines()[0] if version_output.splitlines() else 'unknown'}")
+        
+        # Get available encoders
+        encoders_cmd = [ffmpeg_path, "-encoders"]
+        encoders_output = subprocess.check_output(encoders_cmd, stderr=subprocess.STDOUT, text=True)
+        
+        # Check for hardware encoder presence
+        if re.search(r"h264_nvenc", encoders_output):
+            result["methods"].append("nvenc")
+        if re.search(r"hevc_nvenc", encoders_output):
+            if "nvenc" not in result["methods"]:
+                result["methods"].append("nvenc")
+        if re.search(r"h264_qsv", encoders_output):
+            result["methods"].append("qsv")
+        if re.search(r"hevc_qsv", encoders_output):
+            if "qsv" not in result["methods"]:
+                result["methods"].append("qsv")
+        if re.search(r"h264_vaapi", encoders_output):
+            result["methods"].append("vaapi")
+        if re.search(r"h264_videotoolbox", encoders_output):
+            result["methods"].append("videotoolbox")
+        if re.search(r"h264_amf", encoders_output):
+            result["methods"].append("amf")
+        
+        # Check for -hwaccel support
+        hwaccels_cmd = [ffmpeg_path, "-hwaccels"]
+        try:
+            hwaccels_output = subprocess.check_output(hwaccels_cmd, stderr=subprocess.STDOUT, text=True)
+            
+            # Parse hwaccels output
+            for line in hwaccels_output.splitlines():
+                line = line.strip()
+                if line and line != "Hardware acceleration methods:":
+                    if line not in result["methods"]:
+                        result["methods"].append(line)
+        except subprocess.CalledProcessError:
+            # Some FFmpeg builds don't support -hwaccels
+            logger.warning("FFmpeg -hwaccels command not supported")
+        
+        # Check for CUDA devices if NVENC is available
+        if "nvenc" in result["methods"] or "cuda" in result["methods"]:
+            try:
+                # Try to get NVIDIA device info
+                nvidia_smi_cmd = ["nvidia-smi", "--query-gpu=name,index", "--format=csv,noheader"]
+                nvidia_output = subprocess.check_output(nvidia_smi_cmd, stderr=subprocess.PIPE, text=True)
+                
+                for line in nvidia_output.splitlines():
+                    parts = line.strip().split(", ")
+                    if len(parts) == 2:
+                        name, index = parts
+                        result["devices"]["cuda"].append({"name": name, "index": index})
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                logger.warning("nvidia-smi command failed or not found")
+        
+        # Check for VAAPI devices
+        if "vaapi" in result["methods"]:
+            # Common VAAPI device nodes
+            for device_path in ["/dev/dri/renderD128", "/dev/dri/card0"]:
+                if os.path.exists(device_path):
+                    result["devices"]["vaapi"].append({"path": device_path})
+                    
+        # Determine recommended method
+        if "vaapi" in result["methods"] and result["devices"]["vaapi"]:
+            # VAAPI is the most compatible option on Linux
+            result["recommended"]["method"] = "vaapi"
+            result["recommended"]["device"] = result["devices"]["vaapi"][0]["path"]
+        elif "nvenc" in result["methods"] and result["devices"]["cuda"]:
+            # NVENC if available
+            result["recommended"]["method"] = "nvenc"
+            result["recommended"]["device"] = result["devices"]["cuda"][0]["index"]
+        elif "videotoolbox" in result["methods"]:
+            # VideoToolbox on macOS
+            result["recommended"]["method"] = "videotoolbox"
+        elif "amf" in result["methods"]:
+            # AMD AMF
+            result["recommended"]["method"] = "amf"
+            
+        # Test selected hardware acceleration method with a 2-second clip
+        if result["recommended"]["method"]:
+            logger.info(f"Testing recommended hardware acceleration method: {result['recommended']['method']}")
+            # We could add a quick test here, but for now we just recommended based on presence
+            
+        logger.info(f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}")
+        logger.info(f"Recommended method: {result['recommended']['method'] or 'None'}")
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error detecting hardware acceleration: {str(e)}", exc_info=True)
+        return result
+
 
 def cancel_job(job_id: str) -> bool:
     """Cancel a transcoding job.

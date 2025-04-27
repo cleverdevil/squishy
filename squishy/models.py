@@ -107,6 +107,8 @@ class TranscodeJob:
     duration: Optional[float] = None
     current_time: Optional[float] = None
     process_id: Optional[int] = None  # Store process ID for cancellation
+    ffmpeg_command: Optional[str] = None  # Store the FFmpeg command for reference
+    ffmpeg_logs: List[str] = field(default_factory=list)  # Store FFmpeg logs
     
     @property
     def is_complete(self) -> bool:

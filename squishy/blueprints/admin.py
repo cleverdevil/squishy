@@ -14,6 +14,7 @@ from flask import (
 
 from squishy.config import load_config, save_config, TranscodeProfile, Config
 from squishy.scanner import scan_filesystem, scan_jellyfin, scan_plex
+from squishy.transcoder import detect_hw_accel
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -63,6 +64,8 @@ def add_profile():
         container = request.form["container"]
         quality = request.form["quality"]
         bitrate = request.form.get("bitrate")
+        hw_accel = request.form.get("hw_accel")
+        hw_device = request.form.get("hw_device")
 
         config = load_config()
         config.profiles[name] = TranscodeProfile(
@@ -72,6 +75,8 @@ def add_profile():
             container=container,
             quality=quality,
             bitrate=bitrate,
+            hw_accel=hw_accel if hw_accel else None,
+            hw_device=hw_device if hw_device else None,
         )
         save_config(config)
 
@@ -97,6 +102,12 @@ def edit_profile(name):
         profile.container = request.form["container"]
         profile.quality = request.form["quality"]
         profile.bitrate = request.form.get("bitrate")
+        
+        # Update hardware acceleration settings
+        hw_accel = request.form.get("hw_accel")
+        hw_device = request.form.get("hw_device")
+        profile.hw_accel = hw_accel if hw_accel else None
+        profile.hw_device = hw_device if hw_device else None
 
         save_config(config)
 
@@ -260,6 +271,12 @@ def update_paths_and_mapping():
     config.ffmpeg_path = ffmpeg_path
     config.max_concurrent_jobs = max_concurrent_jobs
     
+    # Update hardware acceleration settings
+    hw_accel = request.form.get("hw_accel")
+    hw_device = request.form.get("hw_device")
+    config.hw_accel = hw_accel if hw_accel else None
+    config.hw_device = hw_device if hw_device and hw_accel else None
+    
     # Create new path mappings dictionary
     path_mappings = {}
     if source_path and target_path:  # Only add if both fields are filled
@@ -270,3 +287,22 @@ def update_paths_and_mapping():
     save_config(config)
     flash("Path configuration updated")
     return redirect(url_for("admin.index"))
+
+
+@admin_bp.route("/detect_hw_accel")
+def detect_hw_accel_route():
+    """Detect available hardware acceleration methods and return as JSON."""
+    config = load_config()
+    ffmpeg_path = config.ffmpeg_path
+    
+    # Run detection
+    hw_accel_info = detect_hw_accel(ffmpeg_path)
+    
+    # Automatically set the recommended hardware acceleration method
+    if hw_accel_info["recommended"]["method"]:
+        config.hw_accel = hw_accel_info["recommended"]["method"]
+        config.hw_device = hw_accel_info["recommended"]["device"]
+        save_config(config)
+        hw_accel_info["auto_configured"] = True
+    
+    return jsonify(hw_accel_info)

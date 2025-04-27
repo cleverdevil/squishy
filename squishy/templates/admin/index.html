@@ -103,6 +103,28 @@
                     <input type="number" id="max_concurrent_jobs" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}" min="1" max="10">
                     <p class="help-text">Maximum number of transcoding jobs that can run simultaneously. Additional jobs will be queued.</p>
                 </div>
+                
+                <hr>
+                <h3>Hardware Acceleration (Global)</h3>
+                <p class="help-text">These settings will be used by default for all transcoding profiles unless overridden in individual profiles.</p>
+                
+                <div class="form-group">
+                    <label for="hw_accel">Hardware Acceleration Method</label>
+                    <select id="hw_accel" name="hw_accel">
+                        <option value="" {% if not config.hw_accel %}selected{% endif %}>None (Software Encoding)</option>
+                        <option value="nvenc" {% if config.hw_accel == "nvenc" %}selected{% endif %}>NVIDIA NVENC</option>
+                        <option value="qsv" {% if config.hw_accel == "qsv" %}selected{% endif %}>Intel QuickSync (QSV)</option>
+                        <option value="vaapi" {% if config.hw_accel == "vaapi" %}selected{% endif %}>VAAPI (Intel/AMD GPU)</option>
+                        <option value="videotoolbox" {% if config.hw_accel == "videotoolbox" %}selected{% endif %}>VideoToolbox (macOS)</option>
+                        <option value="amf" {% if config.hw_accel == "amf" %}selected{% endif %}>AMD AMF</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="hw_device_group" {% if config.hw_accel not in ["nvenc", "cuda", "vaapi"] %}style="display:none"{% endif %}>
+                    <label for="hw_device">Hardware Device</label>
+                    <input type="text" id="hw_device" name="hw_device" value="{{ config.hw_device or '' }}" placeholder="e.g. /dev/dri/renderD128 or 0">
+                    <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
+                </div>
 
                 <hr>
                 <h3>Path Mapping</h3>
@@ -165,6 +187,18 @@
 
         // Update the scan type in the hidden form
         document.getElementById('scan_type').value = selectedSource;
+    }
+    
+    function toggleHwDeviceField() {
+        const hwAccelSelect = document.getElementById('hw_accel');
+        const hwDeviceGroup = document.getElementById('hw_device_group');
+        
+        // Show device field only for methods that need it
+        if (hwAccelSelect.value === 'nvenc' || hwAccelSelect.value === 'cuda' || hwAccelSelect.value === 'vaapi') {
+            hwDeviceGroup.style.display = 'block';
+        } else {
+            hwDeviceGroup.style.display = 'none';
+        }
     }
 
     function scanMedia() {
@@ -309,7 +343,203 @@
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         toggleSourceFields();
+        
+        // Set up hardware acceleration UI interactions
+        const hwAccelSelect = document.getElementById('hw_accel');
+        if (hwAccelSelect) {
+            hwAccelSelect.addEventListener('change', toggleHwDeviceField);
+        }
+        
+        // Set up hardware acceleration detection
+        const detectHwAccelButton = document.querySelector('a[href="{{ url_for("admin.detect_hw_accel_route") }}"]');
+        if (detectHwAccelButton) {
+            detectHwAccelButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                detectHardwareAcceleration();
+            });
+        }
     });
+    
+    function detectHardwareAcceleration() {
+        // Show loading message
+        const hwaccelResults = document.getElementById('hwaccel-results');
+        const methodsDiv = document.getElementById('hwaccel-methods');
+        const devicesDiv = document.getElementById('hwaccel-devices');
+        
+        methodsDiv.innerHTML = '<p>Detecting hardware acceleration methods. This may take a few moments...</p>';
+        hwaccelResults.style.display = 'block';
+        
+        // Make API request to detect hardware acceleration
+        fetch('{{ url_for("admin.detect_hw_accel_route") }}')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Display results
+                displayHardwareAccelerationResults(data);
+            })
+            .catch(error => {
+                methodsDiv.innerHTML = `<p class="error">Error detecting hardware acceleration: ${error.message}</p>`;
+            });
+    }
+    
+    function displayHardwareAccelerationResults(data) {
+        const methodsDiv = document.getElementById('hwaccel-methods');
+        const devicesDiv = document.getElementById('hwaccel-devices');
+        const hwAccelSelect = document.getElementById('hw_accel');
+        const hwDeviceInput = document.getElementById('hw_device');
+        
+        // Clear previous results
+        methodsDiv.innerHTML = '';
+        devicesDiv.innerHTML = '';
+        
+        // Methods
+        if (data.methods && data.methods.length > 0) {
+            const methodsList = document.createElement('ul');
+            data.methods.forEach(method => {
+                const li = document.createElement('li');
+                
+                // Create method entry with apply button
+                const methodSpan = document.createElement('span');
+                methodSpan.textContent = method;
+                li.appendChild(methodSpan);
+                
+                // Only add apply button for usable HW acceleration methods
+                if (['nvenc', 'cuda', 'qsv', 'vaapi', 'videotoolbox', 'amf'].includes(method)) {
+                    const applyButton = document.createElement('button');
+                    applyButton.textContent = 'Use';
+                    applyButton.className = 'button small';
+                    applyButton.style.marginLeft = '10px';
+                    applyButton.addEventListener('click', function() {
+                        // Set the hardware acceleration method
+                        hwAccelSelect.value = method;
+                        
+                        // Trigger change event to update device field visibility
+                        const event = new Event('change');
+                        hwAccelSelect.dispatchEvent(event);
+                    });
+                    li.appendChild(applyButton);
+                }
+                
+                methodsList.appendChild(li);
+            });
+            methodsDiv.appendChild(methodsList);
+        } else {
+            methodsDiv.innerHTML = '<p>No hardware acceleration methods detected.</p>';
+        }
+        
+        // Devices
+        let hasDevices = false;
+        
+        if (data.devices) {
+            for (const [type, devices] of Object.entries(data.devices)) {
+                if (devices.length > 0) {
+                    hasDevices = true;
+                    
+                    const deviceHeader = document.createElement('h4');
+                    deviceHeader.textContent = type.toUpperCase();
+                    devicesDiv.appendChild(deviceHeader);
+                    
+                    const devicesList = document.createElement('ul');
+                    devices.forEach(device => {
+                        const li = document.createElement('li');
+                        
+                        // Display device info with apply button
+                        let deviceText = '';
+                        let deviceValue = '';
+                        
+                        if (device.name && device.index) {
+                            deviceText = `${device.name} (${device.index})`;
+                            deviceValue = device.index;
+                        } else if (device.path) {
+                            deviceText = device.path;
+                            deviceValue = device.path;
+                        } else {
+                            deviceText = JSON.stringify(device);
+                        }
+                        
+                        const deviceSpan = document.createElement('span');
+                        deviceSpan.textContent = deviceText;
+                        li.appendChild(deviceSpan);
+                        
+                        // Add apply button for devices that match the acceleration type
+                        if ((type === 'cuda' && hwAccelSelect.value === 'nvenc') || 
+                            (type === hwAccelSelect.value)) {
+                            const applyButton = document.createElement('button');
+                            applyButton.textContent = 'Use';
+                            applyButton.className = 'button small';
+                            applyButton.style.marginLeft = '10px';
+                            applyButton.addEventListener('click', function() {
+                                // Set the device value
+                                hwDeviceInput.value = deviceValue;
+                            });
+                            li.appendChild(applyButton);
+                        }
+                        
+                        devicesList.appendChild(li);
+                    });
+                    devicesDiv.appendChild(devicesList);
+                }
+            }
+        }
+        
+        if (!hasDevices) {
+            devicesDiv.innerHTML = '<p>No hardware acceleration devices detected.</p>';
+        }
+        
+        // Add Apply All button if methods were detected
+        if (data.methods && data.methods.length > 0) {
+            const applyContainer = document.createElement('div');
+            applyContainer.style.marginTop = '20px';
+            applyContainer.style.textAlign = 'right';
+            
+            let recommendedMethod = '';
+            let recommendedDevice = '';
+            
+            // Determine best method to use
+            if (data.methods.includes('nvenc')) {
+                recommendedMethod = 'nvenc';
+                if (data.devices.cuda && data.devices.cuda.length > 0) {
+                    recommendedDevice = data.devices.cuda[0].index || '0';
+                }
+            } else if (data.methods.includes('qsv')) {
+                recommendedMethod = 'qsv';
+            } else if (data.methods.includes('vaapi')) {
+                recommendedMethod = 'vaapi';
+                if (data.devices.vaapi && data.devices.vaapi.length > 0) {
+                    recommendedDevice = data.devices.vaapi[0].path;
+                }
+            } else if (data.methods.includes('videotoolbox')) {
+                recommendedMethod = 'videotoolbox';
+            } else if (data.methods.includes('amf')) {
+                recommendedMethod = 'amf';
+            }
+            
+            if (recommendedMethod) {
+                const applyButton = document.createElement('button');
+                applyButton.textContent = 'Apply Recommended Settings';
+                applyButton.className = 'button';
+                applyButton.addEventListener('click', function() {
+                    // Set the hardware acceleration method
+                    hwAccelSelect.value = recommendedMethod;
+                    
+                    // Set device if applicable
+                    if (recommendedDevice) {
+                        hwDeviceInput.value = recommendedDevice;
+                    }
+                    
+                    // Trigger change event to update device field visibility
+                    const event = new Event('change');
+                    hwAccelSelect.dispatchEvent(event);
+                });
+                applyContainer.appendChild(applyButton);
+                devicesDiv.appendChild(applyContainer);
+            }
+        }
+    }
 </script>
     <div class="admin-section">
         <h2>Transcoding Profiles</h2>
@@ -318,6 +548,24 @@
             <p>Manage your transcoding profiles for different quality settings.</p>
             <div class="form-submit">
                 <a href="{{ url_for('admin.list_profiles') }}" class="button">Manage Profiles</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="admin-section">
+        <h2>Hardware Acceleration</h2>
+        <div class="card">
+            <p>Hardware acceleration can significantly speed up transcoding. Detect your system's capabilities to use hardware-accelerated transcoding.</p>
+            <div class="form-submit">
+                <a href="{{ url_for('admin.detect_hw_accel_route') }}" class="button">Detect Hardware Acceleration</a>
+            </div>
+            
+            <div id="hwaccel-results" style="display:none; margin-top: 20px;">
+                <h3>Detected Hardware Acceleration Methods</h3>
+                <div id="hwaccel-methods"></div>
+                
+                <h3>Available Devices</h3>
+                <div id="hwaccel-devices"></div>
             </div>
         </div>
     </div>

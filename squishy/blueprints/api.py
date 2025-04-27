@@ -109,6 +109,8 @@ def list_jobs():
                 "progress": job.progress,
                 "output_path": job.output_path,
                 "error_message": job.error_message,
+                "current_time": job.current_time if hasattr(job, 'current_time') else None,
+                "duration": job.duration if hasattr(job, 'duration') else None,
             }
             for job in JOBS.values()
         ]
@@ -129,6 +131,8 @@ def get_job_status(job_id):
         "progress": job.progress,
         "output_path": job.output_path,
         "error_message": job.error_message,
+        "current_time": job.current_time if hasattr(job, 'current_time') else None,
+        "duration": job.duration if hasattr(job, 'duration') else None,
     })
 @api_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job_api(job_id):
@@ -140,3 +144,15 @@ def cancel_job_api(job_id):
         return jsonify({"status": "cancelled"})
     else:
         return jsonify({"error": "Could not cancel job"}), 400
+
+@api_bp.route("/jobs/<job_id>/logs", methods=["GET"])
+def get_job_logs(job_id):
+    """Get the FFmpeg logs for a specific job."""
+    job = get_job(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+    
+    return jsonify({
+        "ffmpeg_command": job.ffmpeg_command,
+        "ffmpeg_logs": job.ffmpeg_logs
+    })

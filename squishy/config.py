@@ -16,6 +16,8 @@ class TranscodeProfile:
     container: str
     quality: str
     bitrate: Optional[str] = None
+    hw_accel: Optional[str] = None
+    hw_device: Optional[str] = None
     
     @classmethod
     def from_dict(cls, data):
@@ -27,6 +29,8 @@ class TranscodeProfile:
             container=data["container"],
             quality=data["quality"],
             bitrate=data.get("bitrate"),
+            hw_accel=data.get("hw_accel"),
+            hw_device=data.get("hw_device"),
         )
 
 @dataclass
@@ -43,6 +47,8 @@ class Config:
     path_mappings: Dict[str, str] = None
     profiles: Dict[str, TranscodeProfile] = None
     max_concurrent_jobs: int = 1  # Default to 1 concurrent job
+    hw_accel: Optional[str] = None  # Global hardware acceleration method
+    hw_device: Optional[str] = None  # Global hardware acceleration device
     
     def __post_init__(self):
         """Ensure dictionaries are initialized."""
@@ -134,6 +140,8 @@ def load_config(config_path: str = None) -> Config:
         path_mappings=path_mappings,
         profiles=profiles,
         max_concurrent_jobs=config_data.get("max_concurrent_jobs", 1),
+        hw_accel=config_data.get("hw_accel"),
+        hw_device=config_data.get("hw_device"),
     )
 
 def save_config(config: Config, config_path: str = None) -> None:
@@ -152,6 +160,10 @@ def save_config(config: Config, config_path: str = None) -> None:
         }
         if profile.bitrate:
             profile_dict["bitrate"] = profile.bitrate
+        if profile.hw_accel:
+            profile_dict["hw_accel"] = profile.hw_accel
+        if profile.hw_device:
+            profile_dict["hw_device"] = profile.hw_device
         profiles_data.append(profile_dict)
     
     config_data = {
@@ -160,7 +172,9 @@ def save_config(config: Config, config_path: str = None) -> None:
         "ffmpeg_path": config.ffmpeg_path,
         "profiles": profiles_data,
         "path_mappings": config.path_mappings,
-        "max_concurrent_jobs": config.max_concurrent_jobs
+        "max_concurrent_jobs": config.max_concurrent_jobs,
+        "hw_accel": config.hw_accel,
+        "hw_device": config.hw_device
     }
     
     # Only include one source configuration

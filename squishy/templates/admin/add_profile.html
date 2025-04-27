@@ -54,10 +54,50 @@
             <input type="text" id="bitrate" name="bitrate" placeholder="e.g. 5M">
         </div>
         
+        <div class="form-group">
+            <label for="hw_accel">Hardware Acceleration</label>
+            <select id="hw_accel" name="hw_accel">
+                <option value="inherit" selected>Inherit Default</option>
+                <option value="">None (Software Encoding)</option>
+                <option value="nvenc">NVIDIA NVENC</option>
+                <option value="qsv">Intel QuickSync (QSV)</option>
+                <option value="vaapi">VAAPI (Intel/AMD GPU)</option>
+                <option value="videotoolbox">VideoToolbox (macOS)</option>
+                <option value="amf">AMD AMF</option>
+            </select>
+            <p class="help-text">Select a hardware acceleration method to speed up transcoding. "Inherit Default" will use the global hardware acceleration settings.</p>
+        </div>
+        
+        <div class="form-group" id="hw_device_group" style="display:none;">
+            <label for="hw_device">Hardware Device</label>
+            <input type="text" id="hw_device" name="hw_device" placeholder="e.g. /dev/dri/renderD128 or 0">
+            <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
+        </div>
+        
         <div class="form-actions">
             <button type="submit">Save Profile</button>
             <a href="{{ url_for('admin.list_profiles') }}" class="button secondary">Cancel</a>
         </div>
+        
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const hwAccelSelect = document.getElementById('hw_accel');
+    const hwDeviceGroup = document.getElementById('hw_device_group');
+    
+    hwAccelSelect.addEventListener('change', function() {
+        // Show device field only for methods that need it
+        if (this.value === 'nvenc' || this.value === 'cuda' || this.value === 'vaapi') {
+            hwDeviceGroup.style.display = 'block';
+        } else {
+            hwDeviceGroup.style.display = 'none';
+            // Clear the device input if not using a supported method
+            if (this.value === 'inherit' || this.value === '') {
+                document.getElementById('hw_device').value = '';
+            }
+        }
+    });
+});
+</script>
     </form>
 </div>
 {% endblock %}
