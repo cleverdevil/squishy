@@ -13,16 +13,10 @@
                 <div class="form-group">
                     <label>Select Media Source:</label>
                     <div class="radio-group">
-                        <label><input type="radio" name="source" value="filesystem" {% if not config.jellyfin_url and not config.plex_url %}checked{% endif %} required onclick="toggleSourceFields()"> Filesystem Only</label>
-                        <label><input type="radio" name="source" value="jellyfin" {% if config.jellyfin_url %}checked{% endif %} onclick="toggleSourceFields()"> Jellyfin</label>
+                        <label><input type="radio" name="source" value="jellyfin" {% if config.jellyfin_url or not config.plex_url %}checked{% endif %} required onclick="toggleSourceFields()"> Jellyfin</label>
                         <label><input type="radio" name="source" value="plex" {% if config.plex_url %}checked{% endif %} onclick="toggleSourceFields()"> Plex</label>
                     </div>
-                </div>
-
-                <div id="filesystemFields" class="source-fields" {% if config.jellyfin_url or config.plex_url %}style="display:none"{% endif %}>
-                    <h3>Media Path</h3>
-                    <p>Your media is located at: <strong>{{ config.media_path }}</strong></p>
-                    <p>You can edit this path in the <a href="#path-config">Path Configuration</a> section below.</p>
+                    <p class="help-text">Squishy requires either a Jellyfin or Plex connection to function.</p>
                 </div>
 
                 <div id="jellyfinFields" class="source-fields" {% if not config.jellyfin_url %}style="display:none"{% endif %}>
@@ -58,7 +52,7 @@
         <h2>Scan Media Library</h2>
         <div class="card">
             <form action="{{ url_for('admin.scan') }}" method="post">
-                <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% elif config.plex_url %}plex{% else %}filesystem{% endif %}">
+                <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% else %}plex{% endif %}">
                 <p>Scan your media from the configured source to update the library.</p>
                 <div class="form-submit">
                     <button type="submit" id="scanButton">Start Scan</button>
@@ -149,7 +143,7 @@
 </div>
 
 <form id="scanForm" action="{{ url_for('admin.scan') }}" method="post" style="display:none">
-    <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% elif config.plex_url %}plex{% else %}filesystem{% endif %}">
+    <input type="hidden" id="scan_type" name="scan_type" value="{% if config.jellyfin_url %}jellyfin{% else %}plex{% endif %}">
 </form>
 
 <script>

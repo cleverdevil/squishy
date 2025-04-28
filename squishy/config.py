@@ -98,12 +98,16 @@ def load_config(config_path: str = None) -> Config:
                 "quality": "low",
                 "bitrate": "1M"
             }
-        ]
+        ],
+        # Default to Jellyfin settings to encourage configuration
+        "jellyfin_url": "",
+        "jellyfin_api_key": ""
     }
         
     if not os.path.exists(config_path):
         # Log that we're using default configuration
         logging.warning(f"Config file not found at {config_path}, using default configuration")
+        logging.warning("Please configure either Jellyfin or Plex to use Squishy.")
         config_data = default_config
     else:
         # Load configuration from file
@@ -114,6 +118,13 @@ def load_config(config_path: str = None) -> Config:
             if "profiles" not in config_data or not config_data["profiles"]:
                 logging.warning("No profiles defined in config file, using default profiles")
                 config_data["profiles"] = default_config["profiles"]
+                
+            # Ensure either Jellyfin or Plex is configured
+            has_jellyfin = config_data.get("jellyfin_url") and config_data.get("jellyfin_api_key")
+            has_plex = config_data.get("plex_url") and config_data.get("plex_token")
+            
+            if not has_jellyfin and not has_plex:
+                logging.warning("No media server configured. Please configure either Jellyfin or Plex to use Squishy.")
         
     # Parse profiles
     profiles = {}

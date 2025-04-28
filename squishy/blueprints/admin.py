@@ -35,10 +35,7 @@ def scan():
     scan_type = request.form["scan_type"]
     config = load_config()
 
-    if scan_type == "filesystem":
-        scan_filesystem_async([config.media_path])
-        flash("Filesystem scan started in background")
-    elif scan_type == "jellyfin" and config.jellyfin_url and config.jellyfin_api_key:
+    if scan_type == "jellyfin" and config.jellyfin_url and config.jellyfin_api_key:
         scan_jellyfin_async(config.jellyfin_url, config.jellyfin_api_key)
         flash("Jellyfin scan started in background")
     elif scan_type == "plex" and config.plex_url and config.plex_token:
@@ -154,6 +151,9 @@ def update_source():
     elif source == "plex":
         config.plex_url = request.form["plex_url"]
         config.plex_token = request.form["plex_token"]
+    else:
+        flash("You must configure either Jellyfin or Plex to use Squishy")
+        return redirect(url_for("admin.index"))
     
     save_config(config)
     flash(f"Media source updated to {source}")

@@ -19,7 +19,7 @@ def perform_initial_scan(config: Config):
         logging.info("Plex configuration found. Starting initial scan in background...")
         scanner.scan_plex_async(config.plex_url, config.plex_token)
     else:
-        logging.info("No media server configuration found. Skipping initial scan.")
+        logging.warning("No media server configuration found. Please configure Jellyfin or Plex to use Squishy.")
 
 def create_app(test_config=None):
     """Create and configure the Flask application."""

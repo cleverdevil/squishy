@@ -1,13 +1,14 @@
 {
-  "media_paths": [
-    "/path/to/movies",
-    "/path/to/tv"
-  ],
+  "media_path": "/path/to/media",
   "transcode_path": "/app/data/transcodes",
+  
+  "_comment": "REQUIRED: Configure either Jellyfin OR Plex (not both). One of them must be set.",
   "jellyfin_url": "http://jellyfin:8096",
   "jellyfin_api_key": "your_api_key",
-  "plex_url": "http://plex:32400",
-  "plex_token": "your_plex_token",
+  
+  "_comment2": "Uncomment these and remove the Jellyfin settings above if you prefer Plex",
+  "_plex_url": "http://plex:32400",
+  "_plex_token": "your_plex_token",
   "profiles": [
     {
       "name": "high",
