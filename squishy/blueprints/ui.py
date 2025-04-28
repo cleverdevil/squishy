@@ -139,19 +139,33 @@ def jobs():
     
     # Get media items for each job to display title instead of ID
     job_data = []
+    
+    # Helper function to format file size
+    def format_file_size(bytes_size):
+        if bytes_size < 1024 * 1024:  # Less than 1 MB
+            return f"{round(bytes_size / 1024, 2)} KB"
+        elif bytes_size < 1024 * 1024 * 1024:  # Less than 1 GB
+            return f"{round(bytes_size / (1024 * 1024), 2)} MB"
+        else:  # GB or larger
+            return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
+    
     for job in JOBS.values():
         media_item = get_media(job.media_id)
         if media_item:
             # Get file size in a human-readable format
             try:
                 file_size_bytes = os.path.getsize(media_item.path)
-                # Format file size in a human-readable way
-                if file_size_bytes < 1024 * 1024:  # Less than 1 MB
-                    file_size = f"{round(file_size_bytes / 1024, 2)} KB"
-                elif file_size_bytes < 1024 * 1024 * 1024:  # Less than 1 GB
-                    file_size = f"{round(file_size_bytes / (1024 * 1024), 2)} MB"
-                else:  # GB or larger
-                    file_size = f"{round(file_size_bytes / (1024 * 1024 * 1024), 2)} GB"
+                file_size = format_file_size(file_size_bytes)
+                
+                # If job is completed and has output path, show both sizes and compression percentage
+                if job.status == "completed" and job.output_path and os.path.exists(job.output_path):
+                    output_size_bytes = os.path.getsize(job.output_path)
+                    output_size = format_file_size(output_size_bytes)
+                    
+                    # Calculate compression percentage
+                    if file_size_bytes > 0:
+                        compression_pct = 100 - (output_size_bytes / file_size_bytes * 100)
+                        file_size = f"{file_size} → {output_size} ({compression_pct:.1f}% smaller)"
                 
                 # For TV shows, include show title
                 if media_item.type == "episode" and media_item.show_id:
@@ -199,4 +213,34 @@ def cancel_job(job_id):
 def completed():
     """Display completed transcodes."""
     completed_transcodes = get_completed_transcodes(current_app.config["TRANSCODE_PATH"])
+    
+    # Helper function to format file size
+    def format_file_size(bytes_size):
+        if bytes_size < 1024 * 1024:  # Less than 1 MB
+            return f"{round(bytes_size / 1024, 2)} KB"
+        elif bytes_size < 1024 * 1024 * 1024:  # Less than 1 GB
+            return f"{round(bytes_size / (1024 * 1024), 2)} MB"
+        else:  # GB or larger
+            return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
+    
+    # Add original file size and compression details
+    for transcode in completed_transcodes:
+        if "original_path" in transcode and os.path.exists(transcode["original_path"]):
+            # Get original file size
+            original_size_bytes = os.path.getsize(transcode["original_path"])
+            original_size = format_file_size(original_size_bytes)
+            
+            # Get transcoded file size
+            output_size_bytes = os.path.getsize(transcode["file_path"])
+            output_size = format_file_size(output_size_bytes)
+            
+            # Calculate compression percentage
+            if original_size_bytes > 0:
+                compression_pct = 100 - (output_size_bytes / original_size_bytes * 100)
+                transcode["size_comparison"] = f"{original_size} → {output_size} ({compression_pct:.1f}% smaller)"
+            else:
+                transcode["size_comparison"] = output_size
+        else:
+            transcode["size_comparison"] = transcode.get("output_size", "Unknown")
+    
     return render_template("ui/completed.html", transcodes=completed_transcodes)

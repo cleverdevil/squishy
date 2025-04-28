@@ -5,7 +5,7 @@
 {% block content %}
 <div class="jobs-list">
     <h1>Transcoding Jobs</h1>
-    
+
     {% if job_data %}
     <table>
         <thead>
@@ -15,7 +15,7 @@
                 <th>Profile</th>
                 <th>Status</th>
                 <th>Progress</th>
-                <th>Output</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -24,7 +24,7 @@
                 <td>{{ item.media_title }}</td>
                 <td>{{ item.file_size }}</td>
                 <td>{{ item.job.profile_name }}</td>
-                <td class="status-{{ item.job.status }}" data-job-id="{{ item.job.id }}">
+                <td class="status-{{ item.job.status }} status" data-job-id="{{ item.job.id }}">
                     {{ item.job.status }}
                     {% if item.job.status == "pending" and loop.index0 > 0 %}
                     <span class="queue-position">(Queue position: {{ loop.index0 }})</span>
@@ -53,40 +53,47 @@
                 </td>
                 <td>
                     <div class="action-buttons-container">
-                        {% if item.job.output_path %}
-                        <a href="/webdav/{{ item.job.output_path.split('/')[-1] }}" target="_blank" 
-                           class="circle-button download-circle-button" title="Download File">
-                            <img src="/static/img/download.svg" alt="Download" width="16" height="16">
-                        </a>
-                        {% if item.job.output_size %}
-                        <span class="output-size" title="File Size">{{ item.job.output_size }}</span>
-                        {% endif %}
-                        {% elif item.job.status == "processing" or item.job.status == "pending" %}
-                        <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
-                            <button type="submit" class="circle-button cancel-button" title="Cancel Job">
-                                <img src="/static/img/cancel.svg" alt="Cancel" width="16" height="16">
+                        {% if item.job.status == "completed" %}
+                            {% if item.job.output_path %}
+                            <a href="/webdav/{{ item.job.output_path.split('/')[-1] }}" target="_blank"
+                               class="circle-button download-circle-button" title="Download">
+                                <img src="/static/img/download.svg" alt="Download" width="16" height="16">
+                            </a>
+                            {% endif %}
+
+                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Log">
+                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
                             </button>
-                        </form>
-                        {% endif %}
-                        
-                        {% if item.job.status in ["processing", "failed", "completed", "cancelled"] %}
-                        <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show/Hide Logs">
-                            <img src="/static/img/log.svg" alt="Logs" width="16" height="16">
-                        </button>
+                        {% elif item.job.status == "processing" or item.job.status == "pending" %}
+                            <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
+                                <button type="submit" class="circle-button cancel-button" title="Cancel">
+                                    <img src="/static/img/cancel.svg" alt="Cancel" width="16" height="16">
+                                </button>
+                            </form>
+
+                            {% if item.job.status == "processing" %}
+                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
+                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
+                            </button>
+                            {% endif %}
+                        {% elif item.job.status in ["failed", "cancelled"] %}
+                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
+                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
+                            </button>
                         {% endif %}
                     </div>
                 </td>
             </tr>
-            
+
             {% if item.job.status in ["processing", "failed", "completed", "cancelled"] %}
             <tr class="logs-row" id="logs-{{ item.job.id }}" style="display: none;">
                 <td colspan="6">
                     <div class="logs-container">
                         <h3>FFmpeg Command:</h3>
                         <pre class="ffmpeg-command" id="command-{{ item.job.id }}">Loading...</pre>
-                        <h3>FFmpeg Logs:</h3>
+                        <h3>FFmpeg Log:</h3>
                         <pre class="ffmpeg-logs" id="logs-content-{{ item.job.id }}">Loading...</pre>
-                        
+
                         {% if item.job.status == "processing" %}
                         <div class="auto-refresh-toggle">
                             <label>
@@ -116,30 +123,30 @@
     let pageReloadTimer = null;
     const openLogStates = new Set();
     const STORAGE_KEY = 'squishyOpenLogs';
-    
+
     // Initialize the auto-refresh mechanism
     function initializeAutoRefresh() {
         if (pageReloadTimer) {
             clearTimeout(pageReloadTimer);
         }
-        
+
         // Load saved open log states from localStorage
         try {
             const savedOpenLogs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
             savedOpenLogs.forEach(jobId => openLogStates.add(jobId));
-            
+
             // Restore open logs from localStorage
             openLogStates.forEach(jobId => {
                 const logsRow = document.getElementById(`logs-${jobId}`);
                 const toggleButton = document.querySelector(`.logs-circle-button[data-job-id="${jobId}"]`);
-                
+
                 if (logsRow && toggleButton) {
                     logsRow.style.display = 'table-row';
-                    toggleButton.title = 'Hide Logs';
-                    
+                    toggleButton.title = 'Hide Log';
+
                     // Load the logs content
                     loadJobLogs(jobId);
-                    
+
                     // Scroll to bottom after a delay to ensure content is loaded
                     setTimeout(() => {
                         const logsEl = document.getElementById(`logs-content-${jobId}`);
@@ -150,10 +157,10 @@
         } catch (e) {
             console.error('Error loading saved log states:', e);
         }
-        
+
         // Auto-refresh job data without reloading the page
         fetchJobUpdates();
-        
+
         // Set up our own page reload every 30 seconds as a fallback
         // Save open log states before reloading
         pageReloadTimer = setTimeout(function() {
@@ -161,7 +168,7 @@
             location.reload();
         }, 30000);
     }
-    
+
     // Save open log states to localStorage
     function saveOpenLogStates() {
         try {
@@ -170,7 +177,7 @@
             console.error('Error saving log states:', e);
         }
     }
-    
+
     // Fetch job updates via AJAX instead of reloading the page
     function fetchJobUpdates() {
         fetch('/api/jobs')
@@ -178,7 +185,7 @@
             .then(data => {
                 // Get a list of all active job IDs
                 const activeJobIds = data.jobs.map(job => job.id);
-                
+
                 // Remove any open log states for jobs that no longer exist
                 [...openLogStates].forEach(jobId => {
                     if (!activeJobIds.includes(jobId)) {
@@ -186,12 +193,12 @@
                         saveOpenLogStates();
                     }
                 });
-                
+
                 // Update job data for each job
                 data.jobs.forEach(job => {
                     updateJobElement(job);
                 });
-                
+
                 // Schedule the next update
                 setTimeout(fetchJobUpdates, 5000);
             })
@@ -204,82 +211,82 @@
                 }, 5000);
             });
     }
-    
+
     // Update a specific job's UI elements
     function updateJobElement(job) {
         // Find the status element for this job
         const statusEl = document.querySelector(`tr td.status-${job.status}[data-job-id="${job.id}"]`);
         if (!statusEl) return;
-        
+
         // Update the progress if it's a processing job
         const progressContainer = document.querySelector(`tr[data-job-id="${job.id}"] .progress-container`);
         if (progressContainer && job.status === 'processing') {
             const progressBar = progressContainer.querySelector('progress');
             const progressText = progressContainer.querySelector('.progress-text');
             const progressTime = progressContainer.querySelector('.progress-time');
-            
+
             if (progressBar) progressBar.value = job.progress;
             if (progressText) progressText.textContent = `${Math.round(job.progress * 100)}%`;
-            
+
             // If we have timing data, update it
             if (progressTime && job.current_time && job.duration) {
                 progressTime.textContent = `${Math.round(job.current_time)}s / ${Math.round(job.duration)}s`;
             }
         }
-        
+
         // If this job has logs open, refresh them
         if (openLogStates.has(job.id)) {
             loadJobLogs(job.id);
         }
     }
-    
+
     // Toggle log visibility
     document.querySelectorAll('.logs-circle-button').forEach(button => {
         button.addEventListener('click', function() {
             const jobId = this.getAttribute('data-job-id');
             const logsRow = document.getElementById(`logs-${jobId}`);
-            
+
             // Toggle visibility
             if (logsRow.style.display === 'none') {
                 logsRow.style.display = 'table-row';
-                this.title = 'Hide Logs';
-                
+                this.title = 'Hide Log';
+
                 // Load logs and scroll to bottom on initial load
                 loadJobLogs(jobId);
-                
+
                 // After logs are loaded, ensure we scroll to bottom (for the initial view)
                 setTimeout(() => {
                     const logsEl = document.getElementById(`logs-content-${jobId}`);
                     scrollToBottom(logsEl);
                 }, 300);
-                
+
                 openLogStates.add(jobId);
                 saveOpenLogStates(); // Save the state change
             } else {
                 logsRow.style.display = 'none';
-                this.title = 'Show Logs';
+                this.title = 'Show Log';
                 openLogStates.delete(jobId);
                 saveOpenLogStates(); // Save the state change
             }
         });
     });
-    
+
     // Load job logs
     function loadJobLogs(jobId) {
         const logsEl = document.getElementById(`logs-content-${jobId}`);
         const shouldAutoScroll = document.querySelector(`.auto-refresh-logs[data-job-id="${jobId}"]`)?.checked;
         const wasAtBottom = isScrolledToBottom(logsEl);
-        
+
         fetch(`/api/jobs/${jobId}/logs`)
             .then(response => response.json())
             .then(data => {
                 // Update command
                 const commandEl = document.getElementById(`command-${jobId}`);
                 commandEl.textContent = data.ffmpeg_command || 'Command not available';
-                
+
                 // Update logs
                 logsEl.textContent = data.ffmpeg_logs.join('\n') || 'No logs available';
-                
+
                 // Auto-scroll to bottom if auto-refresh is enabled or user was already at bottom
                 if (shouldAutoScroll || wasAtBottom) {
                     setTimeout(() => scrollToBottom(logsEl), 10);
@@ -289,24 +296,24 @@
                 console.error('Error fetching logs:', error);
             });
     }
-    
+
     // Check if element is scrolled to bottom
     function isScrolledToBottom(el) {
         // Allow a small buffer (5px) to account for rounding errors
         return el.scrollHeight - el.clientHeight - el.scrollTop <= 5;
     }
-    
+
     // Scroll element to bottom
     function scrollToBottom(el) {
         el.scrollTop = el.scrollHeight;
     }
-    
+
     // Auto-refresh logs for processing jobs
     const refreshIntervals = {};
-    
+
     document.querySelectorAll('.auto-refresh-logs').forEach(checkbox => {
         const jobId = checkbox.getAttribute('data-job-id');
-        
+
         checkbox.addEventListener('change', function() {
             if (this.checked) {
                 // Start auto-refresh
@@ -315,7 +322,7 @@
                         loadJobLogs(jobId);
                     }
                 }, 3000);
-                
+
                 // Immediately scroll to bottom when auto-refresh is enabled
                 const logsEl = document.getElementById(`logs-content-${jobId}`);
                 scrollToBottom(logsEl);
@@ -325,7 +332,7 @@
                 delete refreshIntervals[jobId];
             }
         });
-        
+
         // Initialize auto-refresh if checked
         if (checkbox.checked) {
             refreshIntervals[jobId] = setInterval(() => {
@@ -335,7 +342,7 @@
             }, 3000);
         }
     });
-    
+
     // Start the auto-refresh mechanism on page load
     initializeAutoRefresh();
 </script>
