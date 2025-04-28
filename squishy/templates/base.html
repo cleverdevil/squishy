@@ -31,9 +31,59 @@
         {% block content %}{% endblock %}
     </div>
     
+    <div id="scan-notification" class="scan-notification" style="display: none;">
+        <div class="scan-notification-content">
+            <span id="scan-notification-text">Scanning in progress...</span>
+        </div>
+    </div>
+    
     <footer>
         <p>&copy; Squishy - Media Transcoding Made Simple</p>
     </footer>
+    
+    <script>
+        // Function to check scan status
+        function checkScanStatus() {
+            fetch('/api/scan/status')
+                .then(response => response.json())
+                .then(data => {
+                    const notificationEl = document.getElementById('scan-notification');
+                    const textEl = document.getElementById('scan-notification-text');
+                    
+                    if (data.in_progress) {
+                        // Format message based on the source
+                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                        let message = `${source} scan in progress...`;
+                        
+                        // Show notification
+                        textEl.textContent = message;
+                        notificationEl.style.display = 'block';
+                    } else {
+                        // If completed recently (within the last 5 seconds), show completed message
+                        if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
+                            let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                            textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
+                            notificationEl.style.display = 'block';
+                            
+                            // Hide after 3 seconds
+                            setTimeout(() => {
+                                notificationEl.style.display = 'none';
+                            }, 3000);
+                        } else {
+                            // No active scan and not recently completed
+                            notificationEl.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking scan status:', error);
+                });
+        }
+        
+        // Check scan status immediately and then every 2 seconds
+        checkScanStatus();
+        setInterval(checkScanStatus, 2000);
+    </script>
     
     {% block scripts %}{% endblock %}
 </body>

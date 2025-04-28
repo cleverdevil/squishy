@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request, current_app
 
 from squishy.config import load_config
 from squishy.models import TranscodeJob
-from squishy.scanner import get_all_media, get_media
+from squishy.scanner import get_all_media, get_media, get_scan_status
 from squishy.transcoder import create_job, get_job, start_transcode
 
 api_bp = Blueprint("api", __name__)
@@ -156,3 +156,10 @@ def get_job_logs(job_id):
         "ffmpeg_command": job.ffmpeg_command,
         "ffmpeg_logs": job.ffmpeg_logs
     })
+
+@api_bp.route("/scan/status", methods=["GET"])
+def scan_status():
+    """Get the current scanning status."""
+    status = get_scan_status()
+    
+    return jsonify(status)

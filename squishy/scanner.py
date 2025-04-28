@@ -3,6 +3,8 @@
 import os
 import re
 import uuid
+import threading
+import time
 from typing import Dict, List, Optional, Tuple
 
 import requests
@@ -13,6 +15,15 @@ from squishy.config import load_config
 # In-memory media store - in a real application, this would be in a database
 MEDIA: Dict[str, MediaItem] = {}
 TV_SHOWS: Dict[str, TVShow] = {}
+
+# Scanning status tracker
+SCAN_STATUS = {
+    "in_progress": False,
+    "source": None,
+    "started_at": None,
+    "completed_at": None,
+    "item_count": 0
+}
 
 def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[int]]:
     """Extract season and episode numbers from filename."""
@@ -416,3 +427,85 @@ def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     ]
     
     return shows_with_episodes, valid_movies
+
+def get_scan_status():
+    """Get the current scanning status."""
+    return SCAN_STATUS
+
+def _run_scan_filesystem(media_paths: List[str]):
+    """Run filesystem scan in a separate thread."""
+    global SCAN_STATUS
+    
+    SCAN_STATUS["in_progress"] = True
+    SCAN_STATUS["source"] = "filesystem"
+    SCAN_STATUS["started_at"] = time.time()
+    SCAN_STATUS["item_count"] = 0
+    
+    try:
+        media_items = scan_filesystem(media_paths)
+        SCAN_STATUS["item_count"] = len(media_items)
+    except Exception as e:
+        import logging
+        logging.error(f"Error during filesystem scan: {str(e)}")
+    finally:
+        SCAN_STATUS["in_progress"] = False
+        SCAN_STATUS["completed_at"] = time.time()
+
+def _run_scan_jellyfin(url: str, api_key: str):
+    """Run Jellyfin scan in a separate thread."""
+    global SCAN_STATUS
+    
+    SCAN_STATUS["in_progress"] = True
+    SCAN_STATUS["source"] = "jellyfin"
+    SCAN_STATUS["started_at"] = time.time()
+    SCAN_STATUS["item_count"] = 0
+    
+    try:
+        media_items = scan_jellyfin(url, api_key)
+        SCAN_STATUS["item_count"] = len(media_items)
+    except Exception as e:
+        import logging
+        logging.error(f"Error during Jellyfin scan: {str(e)}")
+    finally:
+        SCAN_STATUS["in_progress"] = False
+        SCAN_STATUS["completed_at"] = time.time()
+
+def _run_scan_plex(url: str, token: str):
+    """Run Plex scan in a separate thread."""
+    global SCAN_STATUS
+    
+    SCAN_STATUS["in_progress"] = True
+    SCAN_STATUS["source"] = "plex"
+    SCAN_STATUS["started_at"] = time.time()
+    SCAN_STATUS["item_count"] = 0
+    
+    try:
+        media_items = scan_plex(url, token)
+        SCAN_STATUS["item_count"] = len(media_items)
+    except Exception as e:
+        import logging
+        logging.error(f"Error during Plex scan: {str(e)}")
+    finally:
+        SCAN_STATUS["in_progress"] = False
+        SCAN_STATUS["completed_at"] = time.time()
+
+def scan_filesystem_async(media_paths: List[str]):
+    """Start filesystem scan in a non-blocking thread."""
+    thread = threading.Thread(target=_run_scan_filesystem, args=(media_paths,))
+    thread.daemon = True
+    thread.start()
+    return thread
+
+def scan_jellyfin_async(url: str, api_key: str):
+    """Start Jellyfin scan in a non-blocking thread."""
+    thread = threading.Thread(target=_run_scan_jellyfin, args=(url, api_key))
+    thread.daemon = True
+    thread.start()
+    return thread
+
+def scan_plex_async(url: str, token: str):
+    """Start Plex scan in a non-blocking thread."""
+    thread = threading.Thread(target=_run_scan_plex, args=(url, token))
+    thread.daemon = True
+    thread.start()
+    return thread

@@ -1,13 +1,25 @@
 """Main Squishy application."""
 
 import os
+import logging
 from flask import Flask
 
-from squishy.config import load_config
+from squishy.config import load_config, Config
 from squishy.blueprints.api import api_bp
 from squishy.blueprints.ui import ui_bp
 from squishy.blueprints.admin import admin_bp
-from squishy.webdav import start_webdav_server
+from squishy import scanner
+
+def perform_initial_scan(config: Config):
+    """Perform initial scan of media if Jellyfin or Plex is configured."""
+    if config.jellyfin_url and config.jellyfin_api_key:
+        logging.info("Jellyfin configuration found. Starting initial scan in background...")
+        scanner.scan_jellyfin_async(config.jellyfin_url, config.jellyfin_api_key)
+    elif config.plex_url and config.plex_token:
+        logging.info("Plex configuration found. Starting initial scan in background...")
+        scanner.scan_plex_async(config.plex_url, config.plex_token)
+    else:
+        logging.info("No media server configuration found. Skipping initial scan.")
 
 def create_app(test_config=None):
     """Create and configure the Flask application."""
@@ -42,17 +54,21 @@ def create_app(test_config=None):
     app.register_blueprint(ui_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
+    # Perform initial scan if media server is configured
+    if not test_config:  # Skip scan during testing
+        perform_initial_scan(config)
+
     return app
 
 def main():
     """Run the application."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
     app = create_app()
-
-    # Start WebDAV server in a separate thread
-    # Note: WebDAV is kept for backward compatibility and external tools
-    # but direct file download is now preferred for browser downloads
-    webdav_port = int(os.environ.get("WEBDAV_PORT", 8983))
-    start_webdav_server(app.config["TRANSCODE_PATH"], webdav_port)
 
     # Run Flask app
     app.run(host="0.0.0.0", port=5101)

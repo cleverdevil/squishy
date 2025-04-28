@@ -13,7 +13,10 @@ from flask import (
 )
 
 from squishy.config import load_config, save_config, TranscodeProfile, Config
-from squishy.scanner import scan_filesystem, scan_jellyfin, scan_plex
+from squishy.scanner import (
+    scan_filesystem, scan_jellyfin, scan_plex,
+    scan_filesystem_async, scan_jellyfin_async, scan_plex_async
+)
 from squishy.transcoder import detect_hw_accel, process_job_queue, get_running_job_count
 
 admin_bp = Blueprint("admin", __name__)
@@ -33,14 +36,14 @@ def scan():
     config = load_config()
 
     if scan_type == "filesystem":
-        scan_filesystem([config.media_path])
-        flash("Filesystem scan completed")
+        scan_filesystem_async([config.media_path])
+        flash("Filesystem scan started in background")
     elif scan_type == "jellyfin" and config.jellyfin_url and config.jellyfin_api_key:
-        scan_jellyfin(config.jellyfin_url, config.jellyfin_api_key)
-        flash("Jellyfin scan completed")
+        scan_jellyfin_async(config.jellyfin_url, config.jellyfin_api_key)
+        flash("Jellyfin scan started in background")
     elif scan_type == "plex" and config.plex_url and config.plex_token:
-        scan_plex(config.plex_url, config.plex_token)
-        flash("Plex scan completed")
+        scan_plex_async(config.plex_url, config.plex_token)
+        flash("Plex scan started in background")
     else:
         flash("Invalid scan type or missing configuration")
 

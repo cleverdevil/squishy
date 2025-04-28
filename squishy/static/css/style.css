@@ -767,6 +767,9 @@ hr {
   margin-bottom: 1rem;
 }
 /* Status styling */
+.status {
+  text-transform: capitalize;
+}
 .status-processing {
   color: var(--warning-color);
   font-weight: 500;
@@ -880,6 +883,7 @@ hr {
 }
 
 /* Status styling for cancelled jobs */
+
 .status-cancelled {
   color: #7f8c8d;
   font-weight: 500;
@@ -1097,4 +1101,37 @@ hr {
 
 .auto-refresh-toggle input[type="checkbox"] {
   margin-right: 0.5rem;
+}
+
+/* Scan notification */
+.scan-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  animation: slide-up 0.3s ease-out;
+}
+
+.scan-notification-content {
+  background-color: rgba(44, 62, 80, 0.95);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: 320px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border-left: 4px solid var(--secondary-color);
+}
+
+@keyframes slide-up {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
