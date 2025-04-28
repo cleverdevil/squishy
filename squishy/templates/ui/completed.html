@@ -40,7 +40,7 @@
                     Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}
                 </div>
                 <div class="transcode-actions">
-                    <a href="/webdav/{{ transcode.file_name }}" class="download-button">Download</a>
+                    <a href="{{ url_for('ui.download_file', filename=transcode.file_name) }}" class="download-button">Download</a>
                 </div>
             </div>
         </div>

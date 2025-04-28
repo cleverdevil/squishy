@@ -55,7 +55,7 @@
                     <div class="action-buttons-container">
                         {% if item.job.status == "completed" %}
                             {% if item.job.output_path %}
-                            <a href="/webdav/{{ item.job.output_path.split('/')[-1] }}" target="_blank"
+                            <a href="{{ url_for('ui.download_file', filename=item.job.output_path.split('/')[-1]) }}"
                                class="circle-button download-circle-button" title="Download">
                                 <img src="/static/img/download.svg" alt="Download" width="16" height="16">
                             </a>

@@ -49,6 +49,8 @@ def main():
     app = create_app()
 
     # Start WebDAV server in a separate thread
+    # Note: WebDAV is kept for backward compatibility and external tools
+    # but direct file download is now preferred for browser downloads
     webdav_port = int(os.environ.get("WEBDAV_PORT", 8983))
     start_webdav_server(app.config["TRANSCODE_PATH"], webdav_port)
 

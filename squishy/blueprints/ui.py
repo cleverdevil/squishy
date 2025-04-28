@@ -3,7 +3,7 @@
 import os
 from flask import (
     Blueprint, render_template, request, redirect, url_for, current_app,
-    flash
+    flash, send_file
 )
 
 from squishy.config import load_config
@@ -244,3 +244,24 @@ def completed():
             transcode["size_comparison"] = transcode.get("output_size", "Unknown")
     
     return render_template("ui/completed.html", transcodes=completed_transcodes)
+
+@ui_bp.route("/download/<filename>")
+def download_file(filename):
+    """Serve a file for download."""
+    transcode_path = current_app.config["TRANSCODE_PATH"]
+    file_path = os.path.join(transcode_path, filename)
+    
+    # Verify the file exists and is within transcode_path
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        flash("File not found")
+        return redirect(url_for("ui.completed"))
+    
+    # Security check - make sure the file is in the transcode directory
+    real_transcode_path = os.path.realpath(transcode_path)
+    real_file_path = os.path.realpath(file_path)
+    if not real_file_path.startswith(real_transcode_path):
+        flash("Invalid file path")
+        return redirect(url_for("ui.completed"))
+    
+    # Set download flag to trigger "Save As" dialog
+    return send_file(file_path, as_attachment=True)
