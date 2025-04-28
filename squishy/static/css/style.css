@@ -800,7 +800,7 @@ hr {
 }
 
 .progress-text {
-  font-size: 0.8rem;
+  font-size: 0.6rem;
   color: var(--dark-color);
   font-weight: 500;
   min-width: 3.5em;
@@ -808,7 +808,7 @@ hr {
 }
 
 .progress-time {
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   color: var(--secondary-color);
   font-family: monospace;
 }
@@ -830,21 +830,25 @@ hr {
 .circle-button {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: none;
   cursor: pointer;
-  transition: transform 0.2s, background-color 0.2s;
+  transition: transform 0.2s;
   position: relative;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: transparent;
   text-decoration: none;
+  padding: 0;
+}
+
+.circle-button img {
+  width: 24px;
+  height: 24px;
 }
 
 .circle-button:hover {
-  transform: scale(1.1);
+  transform: scale(1.2);
 }
 
 .circle-button[title] {
@@ -867,29 +871,7 @@ hr {
   pointer-events: none;
 }
 
-.cancel-button {
-  background-color: var(--error-color);
-}
-
-.cancel-button:hover {
-  background-color: #c0392b;
-}
-
-.download-circle-button {
-  background-color: var(--secondary-color);
-}
-
-.download-circle-button:hover {
-  background-color: #2980b9;
-}
-
-.logs-circle-button {
-  background-color: var(--primary-color);
-}
-
-.logs-circle-button:hover {
-  background-color: #34495e;
-}
+/* Apply colors to the SVG icons directly in the SVG files instead */
 
 .cancel-form {
   display: inline-block;
