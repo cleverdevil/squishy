@@ -72,73 +72,75 @@ def scan_filesystem(media_paths: List[str]) -> List[MediaItem]:
                         media_id = str(uuid.uuid4())
                         full_path = os.path.join(root, file)
                         
-                        # Determine if it's a movie or TV show based on path
-                        if "tv" in root.lower():
-                            # Try to extract season and episode info
-                            season_num, episode_num = extract_season_episode(file)
-                            
-                            # Extract show name (usually the parent directory)
-                            show_name = os.path.basename(os.path.dirname(root))
-                            if show_name.lower() in ('season', 'seasons', 'episodes'):
-                                show_name = os.path.basename(os.path.dirname(os.path.dirname(root)))
+                        # Ensure the file actually exists before adding
+                        if os.path.exists(full_path):
+                            # Determine if it's a movie or TV show based on path
+                            if "tv" in root.lower():
+                                # Try to extract season and episode info
+                                season_num, episode_num = extract_season_episode(file)
                                 
-                            # Create or get TV show
-                            if show_name not in shows_by_name:
-                                show_id = str(uuid.uuid4())
-                                shows_by_name[show_name] = TVShow(
-                                    id=show_id,
-                                    title=show_name,
-                                    year=year
-                                )
-                                TV_SHOWS[show_id] = shows_by_name[show_name]
-                            
-                            show = shows_by_name[show_name]
-                            
-                            # Create episode with best-effort title extraction
-                            if season_num is not None:
-                                episode_title = title
-                                # Try to extract episode title 
-                                if episode_num is not None:
-                                    pattern = rf'S{season_num:02d}E{episode_num:02d}\s*-?\s*(.*)'
-                                    title_match = re.search(pattern, title, re.IGNORECASE)
-                                    if title_match:
-                                        episode_title = title_match.group(1).strip()
+                                # Extract show name (usually the parent directory)
+                                show_name = os.path.basename(os.path.dirname(root))
+                                if show_name.lower() in ('season', 'seasons', 'episodes'):
+                                    show_name = os.path.basename(os.path.dirname(os.path.dirname(root)))
+                                    
+                                # Create or get TV show
+                                if show_name not in shows_by_name:
+                                    show_id = str(uuid.uuid4())
+                                    shows_by_name[show_name] = TVShow(
+                                        id=show_id,
+                                        title=show_name,
+                                        year=year
+                                    )
+                                    TV_SHOWS[show_id] = shows_by_name[show_name]
                                 
-                                # Create and add the episode
-                                episode = Episode(
-                                    id=media_id,
-                                    season_number=season_num,
-                                    episode_number=episode_num,
-                                    title=episode_title,
-                                    year=year,
-                                    path=full_path
-                                )
-                                show.add_episode(episode)
+                                show = shows_by_name[show_name]
                                 
-                                # Also create a MediaItem for the episode
+                                # Create episode with best-effort title extraction
+                                if season_num is not None:
+                                    episode_title = title
+                                    # Try to extract episode title 
+                                    if episode_num is not None:
+                                        pattern = rf'S{season_num:02d}E{episode_num:02d}\s*-?\s*(.*)'
+                                        title_match = re.search(pattern, title, re.IGNORECASE)
+                                        if title_match:
+                                            episode_title = title_match.group(1).strip()
+                                    
+                                    # Create and add the episode
+                                    episode = Episode(
+                                        id=media_id,
+                                        season_number=season_num,
+                                        episode_number=episode_num,
+                                        title=episode_title,
+                                        year=year,
+                                        path=full_path
+                                    )
+                                    show.add_episode(episode)
+                                    
+                                    # Also create a MediaItem for the episode
+                                    media_item = MediaItem(
+                                        id=media_id,
+                                        title=episode_title,
+                                        year=year,
+                                        type="episode",
+                                        path=full_path,
+                                        show_id=show.id,
+                                        season_number=season_num,
+                                        episode_number=episode_num
+                                    )
+                                    media_items.append(media_item)
+                                    MEDIA[media_id] = media_item
+                            else:
+                                # It's a movie
                                 media_item = MediaItem(
                                     id=media_id,
-                                    title=episode_title,
+                                    title=title,
                                     year=year,
-                                    type="episode",
+                                    type="movie",
                                     path=full_path,
-                                    show_id=show.id,
-                                    season_number=season_num,
-                                    episode_number=episode_num
                                 )
                                 media_items.append(media_item)
                                 MEDIA[media_id] = media_item
-                        else:
-                            # It's a movie
-                            media_item = MediaItem(
-                                id=media_id,
-                                title=title,
-                                year=year,
-                                type="movie",
-                                path=full_path,
-                            )
-                            media_items.append(media_item)
-                            MEDIA[media_id] = media_item
     
     return media_items
 
@@ -171,16 +173,18 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 # Apply path mapping to convert media server path to local path
                 mapped_path = apply_path_mapping(item["Path"])
                 
-                media_item = MediaItem(
-                    id=media_id,
-                    title=item.get("Name", ""),
-                    year=item.get("ProductionYear"),
-                    type="movie",
-                    path=mapped_path,
-                    poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
-                )
-                media_items.append(media_item)
-                MEDIA[media_id] = media_item
+                # Only add if the path exists
+                if mapped_path and os.path.exists(mapped_path):
+                    media_item = MediaItem(
+                        id=media_id,
+                        title=item.get("Name", ""),
+                        year=item.get("ProductionYear"),
+                        type="movie",
+                        path=mapped_path,
+                        poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
+                    )
+                    media_items.append(media_item)
+                    MEDIA[media_id] = media_item
     
     # First fetch TV series to get their metadata
     response = requests.get(f"{url}/Items", params={
@@ -219,7 +223,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 # Apply path mapping to convert media server path to local path
                 mapped_path = apply_path_mapping(item["Path"])
                 
-                if series_id in shows_by_id:
+                # Only add if the path exists
+                if mapped_path and os.path.exists(mapped_path) and series_id in shows_by_id:
                     show = shows_by_id[series_id]
                     season_num = item.get("ParentIndexNumber", 0)
                     episode_num = item.get("IndexNumber")
@@ -289,17 +294,22 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                 if "Part" in media and len(media["Part"]) > 0:
                                     file_path = media["Part"][0]["file"]
                                     
-                                    media_id = str(uuid.uuid4())
-                                    media_item = MediaItem(
-                                        id=media_id,
-                                        title=item.get("title", ""),
-                                        year=item.get("year"),
-                                        type="movie",
-                                        path=file_path,
-                                        poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None,
-                                    )
-                                    media_items.append(media_item)
-                                    MEDIA[media_id] = media_item
+                                    # Apply path mapping to convert media server path to local path
+                                    mapped_path = apply_path_mapping(file_path)
+                                    
+                                    # Only add if the path exists
+                                    if mapped_path and os.path.exists(mapped_path):
+                                        media_id = str(uuid.uuid4())
+                                        media_item = MediaItem(
+                                            id=media_id,
+                                            title=item.get("title", ""),
+                                            year=item.get("year"),
+                                            type="movie",
+                                            path=mapped_path,
+                                            poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None,
+                                        )
+                                        media_items.append(media_item)
+                                        MEDIA[media_id] = media_item
             
             elif section_type == "show":
                 # First get all shows in the section
@@ -339,43 +349,36 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                             season_num = episode.get("parentIndex", 0)
                                             episode_num = episode.get("index")
                                             
-                                            # Create the Episode object
-                                            ep = Episode(
-                                                id=media_id,
-                                                season_number=season_num,
-                                                episode_number=episode_num,
-                                                title=episode.get("title", ""),
-                                                year=episode.get("year"),
-                                                path=file_path
-                                            )
                                             # Apply path mapping to convert media server path to local path
                                             mapped_path = apply_path_mapping(file_path)
                                             
-                                            # Create the Episode object
-                                            ep = Episode(
-                                                id=media_id,
-                                                season_number=season_num,
-                                                episode_number=episode_num,
-                                                title=episode.get("title", ""),
-                                                year=episode.get("year"),
-                                                path=mapped_path
-                                            )
-                                            shows_by_key[show_key].add_episode(ep)
-                                            
-                                            # Create the MediaItem
-                                            media_item = MediaItem(
-                                                id=media_id,
-                                                title=episode.get("title", ""),
-                                                year=episode.get("year"),
-                                                type="episode",
-                                                path=mapped_path,
-                                                poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
-                                                show_id=show_id,
-                                                season_number=season_num,
-                                                episode_number=episode_num
-                                            )
-                                            media_items.append(media_item)
-                                            MEDIA[media_id] = media_item
+                                            # Only add if the path exists
+                                            if mapped_path and os.path.exists(mapped_path):
+                                                # Create the Episode object
+                                                ep = Episode(
+                                                    id=media_id,
+                                                    season_number=season_num,
+                                                    episode_number=episode_num,
+                                                    title=episode.get("title", ""),
+                                                    year=episode.get("year"),
+                                                    path=mapped_path
+                                                )
+                                                shows_by_key[show_key].add_episode(ep)
+                                                
+                                                # Create the MediaItem
+                                                media_item = MediaItem(
+                                                    id=media_id,
+                                                    title=episode.get("title", ""),
+                                                    year=episode.get("year"),
+                                                    type="episode",
+                                                    path=mapped_path,
+                                                    poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
+                                                    show_id=show_id,
+                                                    season_number=season_num,
+                                                    episode_number=episode_num
+                                                )
+                                                media_items.append(media_item)
+                                                MEDIA[media_id] = media_item
     
     return media_items
 
@@ -406,10 +409,10 @@ def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     # Filter TV shows to only include those with episodes
     shows_with_episodes = [show for show in TV_SHOWS.values() if show.seasons and any(season.episodes for season in show.seasons.values())]
     
-    # Filter movies to only include those with a valid path
+    # Filter movies to only include those with a valid path (skipping os.path.exists check which is slow)
     valid_movies = [
         item for item in MEDIA.values() 
-        if item.type == "movie" and item.path and os.path.exists(item.path)
+        if item.type == "movie" and item.path
     ]
     
     return shows_with_episodes, valid_movies
