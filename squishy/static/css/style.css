@@ -978,6 +978,16 @@ hr {
 
 .transcode-details {
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.transcode-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .transcode-title {
@@ -1010,26 +1020,21 @@ hr {
 .transcode-date {
   font-size: 0.8rem;
   color: var(--dark-color);
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .transcode-actions {
   margin-top: auto;
+  padding-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
-.download-button {
+.delete-form {
   display: inline-block;
-  padding: 0.5rem 1rem;
-  background-color: var(--primary-color);
-  color: white;
-  border-radius: 4px;
-  text-decoration: none;
-  font-size: 0.9rem;
-  transition: background-color 0.2s;
-}
-
-.download-button:hover {
-  background-color: var(--primary-dark-color);
+  margin: 0;
+  padding: 0;
 }
 /* Queue position styling */
 .queue-position {

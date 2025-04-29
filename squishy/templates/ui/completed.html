@@ -18,29 +18,40 @@
                 {% endif %}
             </div>
             <div class="transcode-details">
-                <h3 class="transcode-title">
-                    {% if transcode.type == "movie" %}
-                    {{ transcode.title }} {% if transcode.year %}({{ transcode.year }}){% endif %}
-                    {% elif transcode.type == "episode" %}
-                    {{ transcode.title }}
-                    <div class="episode-info">
-                        {% if transcode.season_number and transcode.episode_number %}
-                        S{{ transcode.season_number }}E{{ transcode.episode_number }}
+                <div class="transcode-content">
+                    <h3 class="transcode-title">
+                        {% if transcode.type == "movie" %}
+                        {{ transcode.title }} {% if transcode.year %}({{ transcode.year }}){% endif %}
+                        {% elif transcode.type == "episode" %}
+                        {{ transcode.title }}
+                        <div class="episode-info">
+                            {% if transcode.season_number and transcode.episode_number %}
+                            S{{ transcode.season_number }}E{{ transcode.episode_number }}
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        {{ transcode.title }}
                         {% endif %}
+                    </h3>
+                    <div class="transcode-meta">
+                        <span class="profile-name">{{ transcode.profile_name }}</span>
+                        <span class="file-size">{{ transcode.size_comparison }}</span>
                     </div>
-                    {% else %}
-                    {{ transcode.title }}
-                    {% endif %}
-                </h3>
-                <div class="transcode-meta">
-                    <span class="profile-name">{{ transcode.profile_name }}</span>
-                    <span class="file-size">{{ transcode.size_comparison }}</span>
-                </div>
-                <div class="transcode-date">
-                    Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}
+                    <div class="transcode-date">
+                        Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
                 </div>
                 <div class="transcode-actions">
-                    <a href="{{ url_for('ui.download_file', filename=transcode.file_name) }}" class="download-button">Download</a>
+                    <a href="{{ url_for('ui.download_file', filename=transcode.file_name) }}" 
+                       class="circle-button download-circle-button" title="Download">
+                        <img src="/static/img/download.svg" alt="Download" width="24" height="24">
+                    </a>
+                    <form action="{{ url_for('ui.delete_completed_transcode', filename=transcode.file_name) }}" method="post" class="delete-form">
+                        <button type="submit" class="circle-button cancel-button" title="Delete" 
+                                onclick="return confirm('Are you sure you want to delete this transcode? This cannot be undone.')">
+                            <img src="/static/img/cancel.svg" alt="Delete" width="24" height="24">
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

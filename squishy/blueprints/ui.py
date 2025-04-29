@@ -9,7 +9,7 @@ from flask import (
 from squishy.config import load_config
 from squishy.scanner import get_all_media, get_media, get_shows_and_movies, get_show
 from squishy.transcoder import create_job, get_job, start_transcode
-from squishy.completed import get_completed_transcodes
+from squishy.completed import get_completed_transcodes, delete_transcode
 
 ui_bp = Blueprint("ui", __name__)
 
@@ -262,3 +262,18 @@ def download_file(filename):
     
     # Set download flag to trigger "Save As" dialog
     return send_file(file_path, as_attachment=True)
+
+@ui_bp.route("/completed/delete/<filename>", methods=["POST"])
+def delete_completed_transcode(filename):
+    """Delete a completed transcode and its metadata file."""
+    transcode_path = current_app.config["TRANSCODE_PATH"]
+    
+    # Call the delete function from the completed module
+    success, message = delete_transcode(filename, transcode_path)
+    
+    if success:
+        flash(f"Transcode deleted: {message}")
+    else:
+        flash(f"Error deleting transcode: {message}", "error")
+    
+    return redirect(url_for("ui.completed"))
