@@ -15,51 +15,13 @@ ui_bp = Blueprint("ui", __name__)
 
 @ui_bp.route("/")
 def index():
-    """Display the home page with pagination and search."""
-    # Get search query and pagination parameters
+    """Display the home page with client-side pagination and search."""
+    # Get search query for initial state
     search_query = request.args.get('q', '').strip().lower()
-    show_page = max(1, int(request.args.get('show_page', 1)))
-    movie_page = max(1, int(request.args.get('movie_page', 1)))
     
-    # Get all shows and movies
-    all_shows, all_movies = get_shows_and_movies()
-    
-    # Sort alphabetically by title
-    all_shows = sorted(all_shows, key=lambda x: x.title.lower())
-    all_movies = sorted(all_movies, key=lambda x: x.title.lower())
-    
-    # Filter by search query if provided
-    if search_query:
-        all_shows = [show for show in all_shows if search_query in show.title.lower()]
-        all_movies = [movie for movie in all_movies if search_query in movie.title.lower()]
-    
-    # Calculate pagination for shows
-    items_per_page = 50
-    total_shows = len(all_shows)
-    total_show_pages = max(1, (total_shows + items_per_page - 1) // items_per_page)
-    show_page = min(show_page, total_show_pages)
-    show_start_idx = (show_page - 1) * items_per_page
-    show_end_idx = min(show_start_idx + items_per_page, total_shows)
-    paginated_shows = all_shows[show_start_idx:show_end_idx]
-    
-    # Calculate pagination for movies
-    total_movies = len(all_movies)
-    total_movie_pages = max(1, (total_movies + items_per_page - 1) // items_per_page)
-    movie_page = min(movie_page, total_movie_pages)
-    movie_start_idx = (movie_page - 1) * items_per_page
-    movie_end_idx = min(movie_start_idx + items_per_page, total_movies)
-    paginated_movies = all_movies[movie_start_idx:movie_end_idx]
-    
+    # We will load the media via AJAX, so just pass minimal parameters to the template
     return render_template(
         "ui/index.html",
-        shows=paginated_shows,
-        total_shows=total_shows,
-        show_page=show_page,
-        total_show_pages=total_show_pages,
-        movies=paginated_movies,
-        total_movies=total_movies,
-        movie_page=movie_page,
-        total_movie_pages=total_movie_pages,
         search_query=search_query
     )
 

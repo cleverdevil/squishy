@@ -26,6 +26,58 @@ def list_media():
         ]
     })
 
+@api_bp.route("/paginated-media", methods=["GET"])
+def paginated_media():
+    """Get paginated shows and movies data."""
+    from squishy.scanner import get_shows_and_movies
+    
+    # Get search query
+    search_query = request.args.get('q', '').strip().lower()
+
+    # Get all shows and movies
+    all_shows, all_movies = get_shows_and_movies()
+    
+    # Sort alphabetically by title
+    all_shows = sorted(all_shows, key=lambda x: x.title.lower())
+    all_movies = sorted(all_movies, key=lambda x: x.title.lower())
+    
+    # Filter by search query if provided
+    if search_query:
+        all_shows = [show for show in all_shows if search_query in show.title.lower()]
+        all_movies = [movie for movie in all_movies if search_query in movie.title.lower()]
+    
+    # Convert shows to simplified format
+    shows_data = [
+        {
+            "id": show.id,
+            "title": show.title,
+            "display_name": show.display_name,
+            "year": show.year,
+            "poster_url": show.poster_url,
+            "season_count": len(show.seasons)
+        } 
+        for show in all_shows
+    ]
+    
+    # Convert movies to simplified format
+    movies_data = [
+        {
+            "id": movie.id,
+            "title": movie.title,
+            "display_name": movie.display_name,
+            "year": movie.year,
+            "poster_url": movie.poster_url
+        }
+        for movie in all_movies
+    ]
+    
+    return jsonify({
+        "shows": shows_data,
+        "total_shows": len(shows_data),
+        "movies": movies_data,
+        "total_movies": len(movies_data)
+    })
+
 @api_bp.route("/media/<media_id>", methods=["GET"])
 def get_media_item(media_id):
     """Get a specific media item."""
