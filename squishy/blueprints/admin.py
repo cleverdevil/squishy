@@ -1,6 +1,8 @@
 """Admin blueprint for Squishy."""
 
 import os
+import json
+import requests
 from flask import (
     Blueprint,
     render_template,
@@ -224,6 +226,139 @@ def browse_filesystem():
         }), 400
 
 
+@admin_bp.route("/api/libraries")
+def list_libraries():
+    """List all available libraries from the configured media server."""
+    config = load_config()
+    libraries = []
+    
+    try:
+        if config.plex_url and config.plex_token:
+            # Get Plex libraries
+            headers = {
+                "X-Plex-Token": config.plex_token,
+                "Accept": "application/json",
+            }
+            response = requests.get(f"{config.plex_url}/library/sections", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                sections = data.get("MediaContainer", {}).get("Directory", [])
+                
+                for section in sections:
+                    section_id = section.get("key")
+                    if section_id:
+                        libraries.append({
+                            "id": section_id,
+                            "title": section.get("title", "Unknown"),
+                            "type": section.get("type", "unknown"),
+                            "enabled": config.enabled_libraries.get(section_id, True),
+                            "server": "plex"
+                        })
+        
+        elif config.jellyfin_url and config.jellyfin_api_key:
+            # Get Jellyfin libraries
+            headers = {
+                "X-MediaBrowser-Token": config.jellyfin_api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.get(f"{config.jellyfin_url}/Library/VirtualFolders", headers=headers)
+            
+            if response.status_code == 200:
+                sections = response.json()
+                
+                for section in sections:
+                    section_id = section.get("ItemId")
+                    if section_id:
+                        libraries.append({
+                            "id": section_id,
+                            "title": section.get("Name", "Unknown"),
+                            "type": section.get("CollectionType", "unknown").lower(),
+                            "enabled": config.enabled_libraries.get(section_id, True),
+                            "server": "jellyfin"
+                        })
+        
+        return jsonify({"libraries": libraries})
+    
+    except Exception as e:
+        current_app.logger.error(f"Error fetching libraries: {str(e)}")
+        return jsonify({"error": str(e), "libraries": []})
+
+
+@admin_bp.route("/update_libraries", methods=["POST"])
+def update_libraries():
+    """Update library configuration and trigger a scan."""
+    config = load_config()
+    
+    # Get the enabled library IDs from the form
+    enabled_libraries = request.form.getlist("enabled_libraries[]")
+    
+    # Get all libraries to set the proper state for each
+    all_libraries = []
+    
+    if config.jellyfin_url and config.jellyfin_api_key:
+        # Get Jellyfin libraries
+        headers = {
+            "X-MediaBrowser-Token": config.jellyfin_api_key,
+            "Content-Type": "application/json",
+        }
+        response = requests.get(f"{config.jellyfin_url}/Library/VirtualFolders", headers=headers)
+        
+        if response.status_code == 200:
+            sections = response.json()
+            
+            for section in sections:
+                section_id = section.get("ItemId")
+                if section_id:
+                    all_libraries.append(section_id)
+    
+    elif config.plex_url and config.plex_token:
+        # Get Plex libraries
+        headers = {
+            "X-Plex-Token": config.plex_token,
+            "Accept": "application/json",
+        }
+        response = requests.get(f"{config.plex_url}/library/sections", headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            sections = data.get("MediaContainer", {}).get("Directory", [])
+            
+            for section in sections:
+                section_id = section.get("key")
+                if section_id:
+                    all_libraries.append(section_id)
+    
+    # Update enabled_libraries in config
+    new_enabled_libraries = {}
+    for library_id in all_libraries:
+        new_enabled_libraries[library_id] = library_id in enabled_libraries
+    
+    config.enabled_libraries = new_enabled_libraries
+    
+    # Save the config
+    save_config(config)
+    
+    # Clear existing media and trigger a new scan
+    from squishy.scanner import MEDIA, TV_SHOWS, scan_jellyfin_async, scan_plex_async
+    
+    # Clear existing media items
+    MEDIA.clear()
+    TV_SHOWS.clear()
+    
+    # Start a new scan in background
+    if config.jellyfin_url and config.jellyfin_api_key:
+        scan_jellyfin_async(config.jellyfin_url, config.jellyfin_api_key)
+        flash("Library configuration updated and Jellyfin scan started")
+    elif config.plex_url and config.plex_token:
+        scan_plex_async(config.plex_url, config.plex_token)
+        flash("Library configuration updated and Plex scan started")
+    else:
+        flash("Library configuration updated, but no media server is configured")
+    
+    return redirect(url_for("admin.index"))
+
+
 @admin_bp.route("/update_path_mappings", methods=["POST"])
 def update_path_mappings():
     """Update path mapping configuration."""
@@ -265,8 +400,32 @@ def update_paths_and_mapping():
         max_concurrent_jobs = 1
     
     # Get source and target paths for mapping
+    # We now support multiple path mappings
+    # Format in form data: source_path_1, target_path_1, source_path_2, target_path_2, etc.
+    path_mappings = {}
+    
+    # First check the legacy single mapping fields
     source_path = request.form.get("source_path", "").strip()
     target_path = request.form.get("target_path", "").strip()
+    if source_path and target_path:
+        path_mappings[source_path] = target_path
+    
+    # Then check for multiple mappings using numbered fields
+    i = 1
+    while True:
+        source_key = f"source_path_{i}"
+        target_key = f"target_path_{i}"
+        
+        if source_key not in request.form or target_key not in request.form:
+            break
+            
+        source = request.form.get(source_key, "").strip()
+        target = request.form.get(target_key, "").strip()
+        
+        if source and target:
+            path_mappings[source] = target
+            
+        i += 1
     
     # Check if the concurrent job limit changed
     old_max_concurrent_jobs = config.max_concurrent_jobs
@@ -284,12 +443,14 @@ def update_paths_and_mapping():
     config.hw_accel = hw_accel if hw_accel else None
     config.hw_device = hw_device if hw_device and hw_accel else None
     
-    # Create new path mappings dictionary
-    path_mappings = {}
-    if source_path and target_path:  # Only add if both fields are filled
-        path_mappings[source_path] = target_path
-    
+    # Set the path mappings
     config.path_mappings = path_mappings
+    
+    # Log the path mappings for debugging
+    if path_mappings:
+        current_app.logger.debug(f"Updated path mappings: {path_mappings}")
+    else:
+        current_app.logger.debug("No path mappings configured")
     
     # Save config first so process_job_queue uses the updated max_concurrent_jobs
     save_config(config)

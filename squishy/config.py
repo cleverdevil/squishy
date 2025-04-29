@@ -44,11 +44,12 @@ class Config:
     jellyfin_api_key: Optional[str] = None
     plex_url: Optional[str] = None
     plex_token: Optional[str] = None
-    path_mappings: Dict[str, str] = None
+    path_mappings: Dict[str, str] = None  # Dictionary of source path -> target path mappings
     profiles: Dict[str, TranscodeProfile] = None
     max_concurrent_jobs: int = 1  # Default to 1 concurrent job
     hw_accel: Optional[str] = None  # Global hardware acceleration method
     hw_device: Optional[str] = None  # Global hardware acceleration device
+    enabled_libraries: Dict[str, bool] = None  # Dictionary of library_id -> enabled status
     
     def __post_init__(self):
         """Ensure dictionaries are initialized."""
@@ -56,6 +57,8 @@ class Config:
             self.profiles = {}
         if self.path_mappings is None:
             self.path_mappings = {}
+        if self.enabled_libraries is None:
+            self.enabled_libraries = {}
 
 def load_config(config_path: str = None) -> Config:
     """Load configuration from a JSON file."""
@@ -139,6 +142,9 @@ def load_config(config_path: str = None) -> Config:
     
     # Get path mappings
     path_mappings = config_data.get("path_mappings", {})
+    
+    # Get enabled libraries (default all to True if not specified)
+    enabled_libraries = config_data.get("enabled_libraries", {})
             
     return Config(
         media_path=media_path or default_config["media_path"],
@@ -153,6 +159,7 @@ def load_config(config_path: str = None) -> Config:
         max_concurrent_jobs=config_data.get("max_concurrent_jobs", 1),
         hw_accel=config_data.get("hw_accel"),
         hw_device=config_data.get("hw_device"),
+        enabled_libraries=enabled_libraries,
     )
 
 def save_config(config: Config, config_path: str = None) -> None:
@@ -185,7 +192,8 @@ def save_config(config: Config, config_path: str = None) -> None:
         "path_mappings": config.path_mappings,
         "max_concurrent_jobs": config.max_concurrent_jobs,
         "hw_accel": config.hw_accel,
-        "hw_device": config.hw_device
+        "hw_device": config.hw_device,
+        "enabled_libraries": config.enabled_libraries
     }
     
     # Only include one source configuration

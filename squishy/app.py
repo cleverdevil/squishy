@@ -3,6 +3,7 @@
 import os
 import logging
 from flask import Flask
+from flask_socketio import SocketIO
 
 from squishy.config import load_config, Config
 from squishy.blueprints.api import api_bp
@@ -10,13 +11,16 @@ from squishy.blueprints.ui import ui_bp
 from squishy.blueprints.admin import admin_bp
 from squishy import scanner
 
+# Initialize SocketIO globally
+socketio = SocketIO()
+
 def perform_initial_scan(config: Config):
     """Perform initial scan of media if Jellyfin or Plex is configured."""
     if config.jellyfin_url and config.jellyfin_api_key:
-        logging.info("Jellyfin configuration found. Starting initial scan in background...")
+        logging.debug("Jellyfin configuration found. Starting initial scan in background...")
         scanner.scan_jellyfin_async(config.jellyfin_url, config.jellyfin_api_key)
     elif config.plex_url and config.plex_token:
-        logging.info("Plex configuration found. Starting initial scan in background...")
+        logging.debug("Plex configuration found. Starting initial scan in background...")
         scanner.scan_plex_async(config.plex_url, config.plex_token)
     else:
         logging.warning("No media server configuration found. Please configure Jellyfin or Plex to use Squishy.")
@@ -53,6 +57,12 @@ def create_app(test_config=None):
     app.register_blueprint(api_bp, url_prefix="/api")
     app.register_blueprint(ui_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    
+    # Initialize SocketIO with the app
+    socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
+    
+    # Import socket events after socketio initialization to avoid circular imports
+    from squishy import socket_events  # noqa
 
     # Perform initial scan if media server is configured
     if not test_config:  # Skip scan during testing
@@ -62,16 +72,11 @@ def create_app(test_config=None):
 
 def main():
     """Run the application."""
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
+    # Logging is configured in run.py
     app = create_app()
 
-    # Run Flask app
-    app.run(host="0.0.0.0", port=5101)
+    # Run with SocketIO instead of Flask's built-in server
+    socketio.run(app, host="0.0.0.0", port=5101, debug=os.environ.get("DEBUG", "False").lower() == "true")
 
 if __name__ == "__main__":
     main()

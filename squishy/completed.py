@@ -3,6 +3,7 @@
 import os
 import json
 import glob
+import logging
 from typing import List, Dict, Any
 from datetime import datetime
 
@@ -37,7 +38,7 @@ def get_completed_transcodes(transcode_path: str) -> List[Dict[str, Any]]:
             
             completed.append(metadata)
         except Exception as e:
-            print(f"Error reading sidecar file {sidecar_path}: {e}")
+            logging.error(f"Error reading sidecar file {sidecar_path}: {e}")
     
     # Sort by completion date, newest first
     completed.sort(key=lambda x: x.get("completed_at_datetime", datetime.fromtimestamp(0)), reverse=True)

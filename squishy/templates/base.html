@@ -41,48 +41,81 @@
         <p>&copy; Squishy - Media Transcoding Made Simple</p>
     </footer>
     
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        // Function to check scan status
-        function checkScanStatus() {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Connect to SocketIO server
+            const socket = io();
+            
+            const notificationEl = document.getElementById('scan-notification');
+            const textEl = document.getElementById('scan-notification-text');
+            
+            // Listen for connection events
+            socket.on('connect', function() {
+                console.log('Connected to Squishy WebSocket server');
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from Squishy WebSocket server');
+            });
+            
+            // Handle scan status updates
+            socket.on('scan_status', function(data) {
+                if (data.in_progress) {
+                    // Format message based on the source
+                    let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                    let message = `${source} scan in progress...`;
+                    
+                    // Show notification
+                    textEl.textContent = message;
+                    notificationEl.style.display = 'block';
+                } else {
+                    // If completed recently, show completed message
+                    if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
+                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                        textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
+                        notificationEl.style.display = 'block';
+                        
+                        // Hide after 3 seconds
+                        setTimeout(() => {
+                            notificationEl.style.display = 'none';
+                        }, 3000);
+                    } else {
+                        // No active scan and not recently completed
+                        notificationEl.style.display = 'none';
+                    }
+                }
+            });
+            
+            // Handle job updates
+            socket.on('job_update', function(data) {
+                // This event can be used in jobs.html and elsewhere to update job status
+                // We'll dispatch a custom event so other pages can listen
+                const event = new CustomEvent('squishy:job_update', { detail: data });
+                document.dispatchEvent(event);
+            });
+            
+            // Get initial scan status
             fetch('/api/scan/status')
                 .then(response => response.json())
                 .then(data => {
-                    const notificationEl = document.getElementById('scan-notification');
-                    const textEl = document.getElementById('scan-notification-text');
-                    
+                    // Process initial scan status using the same logic
                     if (data.in_progress) {
-                        // Format message based on the source
                         let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
                         let message = `${source} scan in progress...`;
-                        
-                        // Show notification
                         textEl.textContent = message;
                         notificationEl.style.display = 'block';
-                    } else {
-                        // If completed recently (within the last 5 seconds), show completed message
-                        if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
-                            let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                            textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
-                            notificationEl.style.display = 'block';
-                            
-                            // Hide after 3 seconds
-                            setTimeout(() => {
-                                notificationEl.style.display = 'none';
-                            }, 3000);
-                        } else {
-                            // No active scan and not recently completed
-                            notificationEl.style.display = 'none';
-                        }
+                    } else if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
+                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                        textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
+                        notificationEl.style.display = 'block';
+                        setTimeout(() => { notificationEl.style.display = 'none'; }, 3000);
                     }
                 })
                 .catch(error => {
-                    console.error('Error checking scan status:', error);
+                    console.error('Error fetching initial scan status:', error);
                 });
-        }
-        
-        // Check scan status immediately and then every 2 seconds
-        checkScanStatus();
-        setInterval(checkScanStatus, 2000);
+        });
     </script>
     
     {% block scripts %}{% endblock %}

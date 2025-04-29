@@ -119,13 +119,13 @@
 
 {% block scripts %}
 <script>
-    // Instead of reloading the whole page, we'll periodically fetch job status via AJAX
+    // Use WebSockets for real-time updates
     let pageReloadTimer = null;
     const openLogStates = new Set();
     const STORAGE_KEY = 'squishyOpenLogs';
 
-    // Initialize the auto-refresh mechanism
-    function initializeAutoRefresh() {
+    // Initialize the page
+    function initializePage() {
         if (pageReloadTimer) {
             clearTimeout(pageReloadTimer);
         }
@@ -158,28 +158,15 @@
             console.error('Error loading saved log states:', e);
         }
 
-        // Auto-refresh job data without reloading the page
-        fetchJobUpdates();
+        // Set up WebSocket event listener for job updates
+        document.addEventListener('squishy:job_update', function(event) {
+            const jobData = event.detail;
+            if (jobData && jobData.id) {
+                updateJobElement(jobData);
+            }
+        });
 
-        // Set up our own page reload every 30 seconds as a fallback
-        // Save open log states before reloading
-        pageReloadTimer = setTimeout(function() {
-            saveOpenLogStates();
-            location.reload();
-        }, 30000);
-    }
-
-    // Save open log states to localStorage
-    function saveOpenLogStates() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify([...openLogStates]));
-        } catch (e) {
-            console.error('Error saving log states:', e);
-        }
-    }
-
-    // Fetch job updates via AJAX instead of reloading the page
-    function fetchJobUpdates() {
+        // Do an initial fetch of all jobs to ensure we have the latest data
         fetch('/api/jobs')
             .then(response => response.json())
             .then(data => {
@@ -198,18 +185,26 @@
                 data.jobs.forEach(job => {
                     updateJobElement(job);
                 });
-
-                // Schedule the next update
-                setTimeout(fetchJobUpdates, 5000);
             })
             .catch(error => {
-                console.error('Error fetching job updates:', error);
-                // If there's an error, fall back to page reload
-                setTimeout(function() {
-                    saveOpenLogStates();
-                    location.reload();
-                }, 5000);
+                console.error('Error fetching initial job data:', error);
             });
+
+        // Set up our own page reload every 60 seconds as a fallback
+        // This is less important now with WebSockets but still good for reliability
+        pageReloadTimer = setTimeout(function() {
+            saveOpenLogStates();
+            location.reload();
+        }, 60000); // Increased from 30s to 60s since we're using WebSockets
+    }
+
+    // Save open log states to localStorage
+    function saveOpenLogStates() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([...openLogStates]));
+        } catch (e) {
+            console.error('Error saving log states:', e);
+        }
     }
 
     // Update a specific job's UI elements
@@ -343,7 +338,7 @@
         }
     });
 
-    // Start the auto-refresh mechanism on page load
-    initializeAutoRefresh();
+    // Start the page initialization
+    document.addEventListener('DOMContentLoaded', initializePage);
 </script>
 {% endblock %}

@@ -1135,3 +1135,100 @@ hr {
     opacity: 1;
   }
 }
+
+/* Library toggle styles */
+.library-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.button.mini {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.button.success {
+  background-color: var(--success-color);
+}
+
+.button.danger {
+  background-color: var(--error-color);
+}
+
+.library-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.library-item {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  background-color: #ccc;
+  border-radius: 20px;
+  margin-right: 10px;
+  transition: .3s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .3s;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--success-color);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.toggle-label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.library-type {
+  color: #777;
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+/* Media queries for library toggles */
+@media (max-width: 768px) {
+  .library-group {
+    grid-template-columns: 1fr;
+  }
+}

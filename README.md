@@ -20,20 +20,17 @@ transcoding, and downloading your media as frictionless as possible:
   poster art.
 * Integration with Jellyfin and Plex media servers to quickly add your media
   library to Squishy.
-* Don't use a media server? No problem! Squishy has the ability to attach to
-  media libraries via the filesystem.
 * Flexible transcoding profiles, giving you the ability to optimize for your use
   case. Profiles define a target resolution, codec, and quality. Squishy comes
-  with 4 profiles: high, medium, low, and potato, which target H.264 videos in
+  with default profiles: high, medium, low, and potato, which target H.264 videos in
   either MKV or MP4 with 4K, 1080p, 720p, and 480p respectively.
-* Customize profiles to let you dial-in your personal preferences by selecting
-  custom resolutions, bitrates, and codecs such as HEVC and AV1.
-* WebDAV server providing access to your transcoded media that is easy to
-  integrate with media player apps like Infuse and VLC.
+* Customize and create profiles to let you dial-in your personal preferences by
+  selecting custom resolutions, bitrates, and codecs such as HEVC and AV1.
+* Direct download links for your transcoded media that work with any browser or
+  media player app.
 
 ## Installation
 
-
 Squishy can be run manually from source, but the recommended installation method
 is to run Squishy as a Docker Container. The repository includes a
-```docker-compose.`yml file for your convenience.
+`docker-compose.yml` file for your convenience.

@@ -49,6 +49,29 @@
     </div>
 
     <div class="admin-section">
+        <h2>Media Libraries</h2>
+        <div class="card">
+            <div id="librarySelectionSection">
+                <p>Select which libraries to include when scanning your media server.</p>
+                <form action="{{ url_for('admin.update_libraries') }}" method="post" id="libraryForm">
+                    <div class="library-actions">
+                        <button type="button" id="toggleAllLibrariesBtn" class="button mini">Toggle All</button>
+                        <button type="button" id="enableAllLibrariesBtn" class="button mini success">Enable All</button>
+                        <button type="button" id="disableAllLibrariesBtn" class="button mini danger">Disable All</button>
+                    </div>
+                    <div id="libraryList">
+                        <p class="loading">Loading available libraries...</p>
+                    </div>
+                    <div class="form-submit" style="margin-top: 1rem;">
+                        <button type="button" id="refreshLibrariesBtn" class="button secondary">Refresh Libraries</button>
+                        <button type="submit" class="button primary">Save & Scan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-section">
         <h2>Scan Media Library</h2>
         <div class="card">
             <form action="{{ url_for('admin.scan') }}" method="post">
@@ -99,18 +122,46 @@
                 </div>
 
                 <hr>
-                <h3>Path Mapping</h3>
-                <p class="help-text">Path mapping helps resolve path differences between media servers and Squishy. For example, if your media server reports paths as "/media/Movies" but Squishy accesses them at "/opt/Media/Movies", you would map "/media" to "/opt/Media".</p>
+                <h3>Path Mappings</h3>
+                <p class="help-text">Path mappings help resolve path differences between media servers and Squishy. For example, if your media server reports paths as "/media/Movies" but Squishy accesses them at "/opt/Media/Movies", you would map "/media" to "/opt/Media". You can add multiple mappings for different libraries.</p>
 
-                <div class="path-mapping-row">
-                    <div class="form-group">
-                        <label for="source_path">Media Server Path</label>
-                        <input type="text" id="source_path" name="source_path" value="{% if config.path_mappings and config.path_mappings.keys()|list %}{{ config.path_mappings.keys()|list|first }}{% else %}{% endif %}" placeholder="/media">
+                <div id="pathMappings">
+                    <!-- First (possibly existing) mapping -->
+                    <div class="path-mapping-row">
+                        <div class="form-group">
+                            <label for="source_path">Media Server Path</label>
+                            <div class="input-with-button">
+                                <input type="text" id="source_path" name="source_path" value="{% if config.path_mappings and config.path_mappings.keys()|list %}{{ config.path_mappings.keys()|list|first }}{% else %}{% endif %}" placeholder="/media">
+                                {% if config.path_mappings and config.path_mappings.keys()|list|length > 1 %}
+                                <button type="button" class="remove-mapping button danger small">Remove</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="target_path">Squishy Path</label>
+                            <input type="text" id="target_path" name="target_path" value="{% if config.path_mappings and config.path_mappings.values()|list %}{{ config.path_mappings.values()|list|first }}{% else %}{% endif %}" placeholder="/opt/media">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="target_path">Squishy Path</label>
-                        <input type="text" id="target_path" name="target_path" value="{% if config.path_mappings and config.path_mappings.values()|list %}{{ config.path_mappings.values()|list|first }}{% else %}{% endif %}" placeholder="/opt/media">
+                    
+                    <!-- Additional mappings -->
+                    {% set mapping_keys = config.path_mappings.keys()|list if config.path_mappings else [] %}
+                    {% set mapping_values = config.path_mappings.values()|list if config.path_mappings else [] %}
+                    {% for i in range(1, mapping_keys|length) %}
+                    <div class="path-mapping-row">
+                        <div class="form-group">
+                            <label for="source_path_{{ loop.index }}">Media Server Path {{ loop.index + 1 }}</label>
+                            <input type="text" id="source_path_{{ loop.index }}" name="source_path_{{ loop.index }}" value="{{ mapping_keys[i] }}" placeholder="/another/path">
+                        </div>
+                        <div class="form-group">
+                            <label for="target_path_{{ loop.index }}">Squishy Path {{ loop.index + 1 }}</label>
+                            <input type="text" id="target_path_{{ loop.index }}" name="target_path_{{ loop.index }}" value="{{ mapping_values[i] }}" placeholder="/local/path">
+                        </div>
                     </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="form-group">
+                    <button type="button" id="addMapping" class="button secondary">Add Another Mapping</button>
                 </div>
 
                 <div class="form-submit">
@@ -312,9 +363,133 @@
         }
     }
 
+    // Load and display libraries
+    function loadLibraries() {
+        const libraryList = document.getElementById('libraryList');
+        libraryList.innerHTML = '<p class="loading">Loading available libraries...</p>';
+        
+        fetch('{{ url_for("admin.list_libraries") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    libraryList.innerHTML = `<p class="error">Error loading libraries: ${data.error}</p>`;
+                    return;
+                }
+                
+                if (!data.libraries || data.libraries.length === 0) {
+                    libraryList.innerHTML = '<p>No libraries found. Please configure your media server and ensure it has libraries.</p>';
+                    return;
+                }
+                
+                // Create the library toggle UI
+                const movieLibraries = data.libraries.filter(lib => lib.type === 'movie');
+                const tvLibraries = data.libraries.filter(lib => lib.type === 'show');
+                const otherLibraries = data.libraries.filter(lib => lib.type !== 'movie' && lib.type !== 'show');
+                
+                let html = '';
+                
+                // Movies section
+                if (movieLibraries.length > 0) {
+                    html += '<h3>Movie Libraries</h3>';
+                    html += '<div class="library-group">';
+                    movieLibraries.forEach(lib => {
+                        html += createLibraryToggle(lib);
+                    });
+                    html += '</div>';
+                }
+                
+                // TV Shows section
+                if (tvLibraries.length > 0) {
+                    html += '<h3>TV Show Libraries</h3>';
+                    html += '<div class="library-group">';
+                    tvLibraries.forEach(lib => {
+                        html += createLibraryToggle(lib);
+                    });
+                    html += '</div>';
+                }
+                
+                // Other Libraries section
+                if (otherLibraries.length > 0) {
+                    html += '<h3>Other Libraries</h3>';
+                    html += '<div class="library-group">';
+                    otherLibraries.forEach(lib => {
+                        html += createLibraryToggle(lib);
+                    });
+                    html += '</div>';
+                }
+                
+                libraryList.innerHTML = html;
+            })
+            .catch(error => {
+                libraryList.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            });
+    }
+    
+    function createLibraryToggle(library) {
+        return `
+            <div class="library-item">
+                <label class="toggle-switch">
+                    <input type="checkbox" class="library-toggle-checkbox" 
+                           name="enabled_libraries[]" 
+                           value="${library.id}" 
+                           ${library.enabled ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">${library.title}</span>
+                    <small class="library-type">${library.type}</small>
+                </label>
+            </div>
+        `;
+    }
+    
+    // Add bulk action functions for toggling all checkboxes
+    function toggleAllLibraries(targetState) {
+        document.querySelectorAll('.library-toggle-checkbox').forEach(checkbox => {
+            checkbox.checked = targetState;
+        });
+    }
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
         toggleSourceFields();
+        
+        // Load libraries
+        loadLibraries();
+        
+        // Add refresh button handler
+        const refreshButton = document.getElementById('refreshLibrariesBtn');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', loadLibraries);
+        }
+        
+        // Add bulk action handlers
+        const toggleAllButton = document.getElementById('toggleAllLibrariesBtn');
+        if (toggleAllButton) {
+            toggleAllButton.addEventListener('click', function() {
+                const checkboxes = document.querySelectorAll('.library-toggle-checkbox');
+                const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+                const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
+                
+                // If all are checked, uncheck all; if some or none are checked, check all
+                const newState = !(anyChecked && !anyUnchecked);
+                
+                // Toggle all checkboxes to the new state
+                toggleAllLibraries(newState);
+            });
+        }
+        
+        const enableAllButton = document.getElementById('enableAllLibrariesBtn');
+        if (enableAllButton) {
+            enableAllButton.addEventListener('click', function() {
+                toggleAllLibraries(true);
+            });
+        }
+        
+        const disableAllButton = document.getElementById('disableAllLibrariesBtn');
+        if (disableAllButton) {
+            disableAllButton.addEventListener('click', function() {
+                toggleAllLibraries(false);
+            });
+        }
         
         // Set up hardware acceleration UI interactions
         const hwAccelSelect = document.getElementById('hw_accel');
@@ -512,6 +687,90 @@
             }
         }
     }
+    
+    // Path mapping UI functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const addMappingButton = document.getElementById('addMapping');
+        if (addMappingButton) {
+            addMappingButton.addEventListener('click', function() {
+                const pathMappingsContainer = document.getElementById('pathMappings');
+                const existingMappings = pathMappingsContainer.querySelectorAll('.path-mapping-row');
+                const nextIndex = existingMappings.length;
+                
+                const newMapping = document.createElement('div');
+                newMapping.className = 'path-mapping-row';
+                newMapping.innerHTML = `
+                    <div class="form-group">
+                        <label for="source_path_${nextIndex}">Media Server Path ${nextIndex + 1}</label>
+                        <div class="input-with-button">
+                            <input type="text" id="source_path_${nextIndex}" name="source_path_${nextIndex}" placeholder="/another/path">
+                            <button type="button" class="remove-mapping button danger small">Remove</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="target_path_${nextIndex}">Squishy Path ${nextIndex + 1}</label>
+                        <input type="text" id="target_path_${nextIndex}" name="target_path_${nextIndex}" placeholder="/local/path">
+                    </div>
+                `;
+                
+                pathMappingsContainer.appendChild(newMapping);
+                
+                // Add click handler for the remove button
+                const removeButton = newMapping.querySelector('.remove-mapping');
+                if (removeButton) {
+                    removeButton.addEventListener('click', function() {
+                        newMapping.remove();
+                        // Re-number the remaining mappings
+                        renumberMappings();
+                    });
+                }
+            });
+        }
+        
+        // Function to renumber the mappings after removal
+        function renumberMappings() {
+            const pathMappingsContainer = document.getElementById('pathMappings');
+            const mappingRows = pathMappingsContainer.querySelectorAll('.path-mapping-row');
+            
+            // Skip the first row (which uses source_path and target_path without numbers)
+            for (let i = 1; i < mappingRows.length; i++) {
+                const row = mappingRows[i];
+                const sourceInput = row.querySelector('input[name^="source_path_"]');
+                const targetInput = row.querySelector('input[name^="target_path_"]');
+                const sourceLabel = row.querySelector('label[for^="source_path_"]');
+                const targetLabel = row.querySelector('label[for^="target_path_"]');
+                
+                if (sourceInput && targetInput) {
+                    // Update the input IDs and names
+                    sourceInput.id = `source_path_${i}`;
+                    sourceInput.name = `source_path_${i}`;
+                    targetInput.id = `target_path_${i}`;
+                    targetInput.name = `target_path_${i}`;
+                    
+                    // Update the labels
+                    if (sourceLabel) {
+                        sourceLabel.setAttribute('for', `source_path_${i}`);
+                        sourceLabel.textContent = `Media Server Path ${i + 1}`;
+                    }
+                    if (targetLabel) {
+                        targetLabel.setAttribute('for', `target_path_${i}`);
+                        targetLabel.textContent = `Squishy Path ${i + 1}`;
+                    }
+                }
+            }
+        }
+        
+        // Add click handlers for existing remove buttons
+        document.querySelectorAll('.remove-mapping').forEach(button => {
+            button.addEventListener('click', function() {
+                const mappingRow = this.closest('.path-mapping-row');
+                if (mappingRow) {
+                    mappingRow.remove();
+                    renumberMappings();
+                }
+            });
+        });
+    });
 </script>
     <div class="admin-section">
         <h2>Transcoding Profiles</h2>

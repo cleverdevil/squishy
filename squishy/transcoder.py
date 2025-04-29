@@ -18,10 +18,8 @@ from squishy.scanner import get_media
 
 # Configure logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging based on the config's log level
+# We don't set level here as it's set in run.py
 
 # In-memory job store - in a real application, this would be in a database
 JOBS: Dict[str, TranscodeJob] = {}
@@ -43,7 +41,7 @@ def create_job(media_item: MediaItem, profile_name: str) -> TranscodeJob:
         status="pending",
     )
     JOBS[job_id] = job
-    logger.info(f"Created job with id={job_id}")
+    logger.debug(f"Created job with id={job_id}")
     return job
 
 def get_job(job_id: str) -> Optional[TranscodeJob]:
@@ -93,7 +91,7 @@ def process_job_queue():
             if job and job.status == "pending":
                 # Start the job
                 _start_transcode_job(job, media_item, profile, output_dir)
-                logger.info(f"Started queued job {job_id}, {len(JOB_QUEUE)} jobs remaining in queue")
+                logger.debug(f"Started queued job {job_id}, {len(JOB_QUEUE)} jobs remaining in queue")
                 available_slots -= 1
             else:
                 logger.warning(f"Job {job_id} in queue is not in pending state or doesn't exist anymore")
@@ -129,7 +127,7 @@ def process_job_queue():
             
             # Start the job
             _start_transcode_job(job, media_item, profile, output_dir)
-            logger.info(f"Started pending job {job.id} that was not in queue")
+            logger.debug(f"Started pending job {job.id} that was not in queue")
             
             available_slots -= 1
             if available_slots <= 0:
@@ -137,7 +135,7 @@ def process_job_queue():
 
 def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str):
     """Start or queue a transcoding job based on concurrency limits."""
-    logger.info(f"Starting transcode job={job.id} for media={media_item.id}, profile={profile.name}")
+    logger.debug(f"Starting transcode job={job.id} for media={media_item.id}, profile={profile.name}")
     logger.debug(f"Profile settings: resolution={profile.resolution}, codec={profile.codec}, "
                  f"container={profile.container}, quality={profile.quality}, bitrate={profile.bitrate}")
     
@@ -150,7 +148,7 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
     if current_running < max_jobs:
         # Start the job immediately
         _start_transcode_job(job, media_item, profile, output_dir)
-        logger.info(f"Started job {job.id} immediately")
+        logger.debug(f"Started job {job.id} immediately")
     else:
         # Queue the job
         JOB_QUEUE.append({
@@ -159,7 +157,7 @@ def start_transcode(job: TranscodeJob, media_item: MediaItem, profile: Transcode
             "profile": profile,
             "output_dir": output_dir
         })
-        logger.info(f"Queued job {job.id}, position in queue: {len(JOB_QUEUE)}")
+        logger.debug(f"Queued job {job.id}, position in queue: {len(JOB_QUEUE)}")
 
 def _start_transcode_job(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str):
     """Internal function to start a transcoding job."""
@@ -188,7 +186,28 @@ def transcode_thread(job: TranscodeJob, media_item: MediaItem, profile: Transcod
                      output_dir: str, callback: Optional[Callable] = None):
     """Thread function for transcoding."""
     try:
+        # Import here to avoid circular imports
+        from squishy.socket_events import emit_job_update
+        
+        # Emit initial job state
+        emit_job_update({
+            "id": job.id,
+            "media_id": job.media_id,
+            "status": job.status,
+            "progress": job.progress
+        })
+        
         transcode(job, media_item, profile, output_dir)
+        
+        # Emit final job state
+        emit_job_update({
+            "id": job.id,
+            "media_id": job.media_id,
+            "status": job.status,
+            "progress": job.progress,
+            "output_path": job.output_path,
+            "output_size": job.output_size
+        })
     finally:
         # Call the callback if provided
         if callback:
@@ -198,7 +217,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
     """Perform the transcoding."""
     try:
         job.status = "processing"
-        logger.info(f"Job {job.id} status changed to processing")
+        logger.debug(f"Job {job.id} status changed to processing")
         
         # Get original filename without extension
         original_filename = os.path.basename(media_item.path)
@@ -510,7 +529,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
         logger.debug(f"FFmpeg command: {ffmpeg_command_str}")
         
         # Run the transcoding
-        logger.info(f"Starting FFmpeg process for job {job.id}")
+        logger.debug(f"Starting FFmpeg process for job {job.id}")
         try:
             # Properly quote command arguments to handle spaces and special characters
             # This ensures subprocess doesn't have issues with argument parsing
@@ -575,6 +594,19 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                                     if job.duration:
                                         job.progress = min(current_time / job.duration, 0.99)
                                         logger.debug(f"Progress: {job.progress:.2%}")
+                                        
+                                        # Import here to avoid circular imports - emit progress every 2 seconds
+                                        if int(current_time) % 2 == 0:
+                                            from squishy.socket_events import emit_job_update
+                                            emit_job_update({
+                                                "id": job.id,
+                                                "media_id": job.media_id,
+                                                "status": job.status,
+                                                "progress": job.progress,
+                                                "current_time": job.current_time,
+                                                "duration": job.duration,
+                                                "output_size": job.output_size
+                                            })
                                 except (ValueError, IndexError) as e:
                                     logger.warning(f"Error parsing time: {str(e)}")
                             
@@ -1294,7 +1326,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     # Not a hardware acceleration error or no hardware acceleration was used
                     raise RuntimeError(f"FFmpeg failed with return code {process.returncode}")
             
-            logger.info(f"FFmpeg process completed successfully for job {job.id}")
+            logger.debug(f"FFmpeg process completed successfully for job {job.id}")
             
             # Update job status
             job.status = "completed"
@@ -1306,7 +1338,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                 output_size = os.path.getsize(output_path)
                 job.output_size = format_file_size(output_size)
                 
-            logger.info(f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}")
+            logger.debug(f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}")
             
             # Create JSON sidecar file with metadata
             sidecar_path = f"{output_path}.json"
@@ -1333,7 +1365,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             with open(sidecar_path, "w") as f:
                 json.dump(metadata, f, indent=2)
                 
-            logger.info(f"Created metadata sidecar file: {sidecar_path}")
+            logger.debug(f"Created metadata sidecar file: {sidecar_path}")
             
         except Exception as e:
             logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
@@ -1435,7 +1467,7 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
         }
     }
     
-    logger.info("Detecting available hardware acceleration methods...")
+    logger.debug("Detecting available hardware acceleration methods...")
     
     # Check FFmpeg version and codecs
     try:

@@ -16,8 +16,9 @@ dependencies = [
     "flask-login",
     "python-dotenv",
     "requests",
-    "wsgidav",  # for WebDAV server
     "ffmpeg-python",  # for transcoding
+    "flask-socketio",  # for WebSockets
+    "eventlet",  # WebSocket backend
 ]
 
 [project.optional-dependencies]

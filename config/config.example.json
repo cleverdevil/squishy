@@ -9,6 +9,11 @@
   "_comment2": "Uncomment these and remove the Jellyfin settings above if you prefer Plex",
   "_plex_url": "http://plex:32400",
   "_plex_token": "your_plex_token",
+  
+  "path_mappings": {
+    "/path/on/plex/server": "/local/path/on/squishy/server",
+    "/media": "/opt/media"
+  },
   "profiles": [
     {
       "name": "high",
