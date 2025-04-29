@@ -330,6 +330,18 @@ button:hover {
   margin-bottom: 1.5rem;
 }
 
+.jobs-list h2 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--secondary-color);
+  padding-bottom: 0.5rem;
+}
+
+.jobs-list h2:first-of-type {
+  margin-top: 1rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -337,6 +349,7 @@ table {
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
 }
 
 thead {

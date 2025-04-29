@@ -134,11 +134,13 @@ def transcode(media_id):
 
 @ui_bp.route("/jobs")
 def jobs():
-    """Display transcoding jobs."""
+    """Display transcoding jobs grouped by status."""
     from squishy.transcoder import JOBS
     
     # Get media items for each job to display title instead of ID
-    job_data = []
+    active_jobs = []
+    completed_jobs = []
+    failed_jobs = []
     
     # Helper function to format file size
     def format_file_size(bytes_size):
@@ -177,26 +179,59 @@ def jobs():
                 else:
                     media_title = media_item.display_name
                 
-                job_data.append({
+                job_data = {
                     "job": job,
                     "media_title": media_title,
                     "file_size": file_size
-                })
+                }
+                
+                # Categorize job by status
+                if job.status in ["processing", "pending"]:
+                    active_jobs.append(job_data)
+                elif job.status == "completed":
+                    completed_jobs.append(job_data)
+                else:  # failed or cancelled
+                    failed_jobs.append(job_data)
+                    
             except (FileNotFoundError, OSError):
                 # Handle case where file doesn't exist or can't be accessed
-                job_data.append({
+                job_data = {
                     "job": job,
                     "media_title": media_item.display_name if media_item else "Unknown",
                     "file_size": "N/A"
-                })
+                }
+                
+                # Categorize job by status
+                if job.status in ["processing", "pending"]:
+                    active_jobs.append(job_data)
+                elif job.status == "completed":
+                    completed_jobs.append(job_data)
+                else:  # failed or cancelled
+                    failed_jobs.append(job_data)
         else:
-            job_data.append({
+            job_data = {
                 "job": job,
                 "media_title": "Unknown",
                 "file_size": "N/A"
-            })
+            }
+            
+            # Categorize job by status
+            if job.status in ["processing", "pending"]:
+                active_jobs.append(job_data)
+            elif job.status == "completed":
+                completed_jobs.append(job_data)
+            else:  # failed or cancelled
+                failed_jobs.append(job_data)
     
-    return render_template("ui/jobs.html", job_data=job_data)
+    # Sort active jobs to put processing ones first, then pending ones
+    active_jobs.sort(key=lambda x: 0 if x["job"].status == "processing" else 1)
+    
+    return render_template(
+        "ui/jobs.html", 
+        active_jobs=active_jobs,
+        completed_jobs=completed_jobs,
+        failed_jobs=failed_jobs
+    )
 @ui_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
     """Cancel a transcoding job."""

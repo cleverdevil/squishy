@@ -6,7 +6,99 @@
 <div class="jobs-list">
     <h1>Transcoding Jobs</h1>
 
-    {% if job_data %}
+    {# Macro for job row to avoid code duplication #}
+    {% macro render_job_row(item, queue_index=0) %}
+    <tr data-job-id="{{ item.job.id }}">
+        <td>{{ item.media_title }}</td>
+        <td>{{ item.file_size }}</td>
+        <td>{{ item.job.profile_name }}</td>
+        <td class="status-{{ item.job.status }} status" data-job-id="{{ item.job.id }}">
+            {{ item.job.status }}
+            {% if item.job.status == "pending" and queue_index > 0 %}
+            <span class="queue-position">(Queue position: {{ queue_index }})</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if item.job.status == "processing" %}
+            <div class="progress-container">
+                <div class="progress-bar-row">
+                    <progress value="{{ item.job.progress }}" max="1.0"></progress>
+                    <span class="progress-text">{{ (item.job.progress * 100)|int }}%</span>
+                </div>
+                {% if item.job.current_time and item.job.duration %}
+                <span class="progress-time">{{ item.job.current_time|int }}s / {{ item.job.duration|int }}s</span>
+                {% endif %}
+            </div>
+            {% elif item.job.status == "completed" %}
+            <span class="status-complete">Complete</span>
+            {% elif item.job.status == "failed" %}
+            <span class="status-failed">Failed</span>
+            {% elif item.job.status == "cancelled" %}
+            <span class="status-cancelled">Cancelled</span>
+            {% else %}
+            <span class="status-pending">Pending</span>
+            {% endif %}
+        </td>
+        <td>
+            <div class="action-buttons-container">
+                {% if item.job.status == "completed" %}
+                    {% if item.job.output_path %}
+                    <a href="{{ url_for('ui.download_file', filename=item.job.output_path.split('/')[-1]) }}"
+                       class="circle-button download-circle-button" title="Download">
+                        <img src="/static/img/download.svg" alt="Download" width="16" height="16">
+                    </a>
+                    {% endif %}
+
+                    <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Log">
+                        <img src="/static/img/log.svg" alt="Log" width="16" height="16">
+                    </button>
+                {% elif item.job.status == "processing" or item.job.status == "pending" %}
+                    <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
+                        <button type="submit" class="circle-button cancel-button" title="Cancel">
+                            <img src="/static/img/cancel.svg" alt="Cancel" width="16" height="16">
+                        </button>
+                    </form>
+
+                    {% if item.job.status == "processing" %}
+                    <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
+                        <img src="/static/img/log.svg" alt="Log" width="16" height="16">
+                    </button>
+                    {% endif %}
+                {% elif item.job.status in ["failed", "cancelled"] %}
+                    <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
+                        <img src="/static/img/log.svg" alt="Log" width="16" height="16">
+                    </button>
+                {% endif %}
+            </div>
+        </td>
+    </tr>
+
+    {% if item.job.status in ["processing", "failed", "completed", "cancelled"] %}
+    <tr class="logs-row" id="logs-{{ item.job.id }}" style="display: none;">
+        <td colspan="6">
+            <div class="logs-container">
+                <h3>FFmpeg Command:</h3>
+                <pre class="ffmpeg-command" id="command-{{ item.job.id }}">Loading...</pre>
+                <h3>FFmpeg Log:</h3>
+                <pre class="ffmpeg-logs" id="logs-content-{{ item.job.id }}">Loading...</pre>
+
+                {% if item.job.status == "processing" %}
+                <div class="auto-refresh-toggle">
+                    <label>
+                        <input type="checkbox" class="auto-refresh-logs" data-job-id="{{ item.job.id }}" checked>
+                        Auto-refresh logs
+                    </label>
+                </div>
+                {% endif %}
+            </div>
+        </td>
+    </tr>
+    {% endif %}
+    {% endmacro %}
+
+    {# Active Jobs Section #}
+    <h2>Active Jobs</h2>
+    {% if active_jobs %}
     <table>
         <thead>
             <tr>
@@ -19,97 +111,71 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in job_data %}
-            <tr data-job-id="{{ item.job.id }}">
-                <td>{{ item.media_title }}</td>
-                <td>{{ item.file_size }}</td>
-                <td>{{ item.job.profile_name }}</td>
-                <td class="status-{{ item.job.status }} status" data-job-id="{{ item.job.id }}">
-                    {{ item.job.status }}
-                    {% if item.job.status == "pending" and loop.index0 > 0 %}
-                    <span class="queue-position">(Queue position: {{ loop.index0 }})</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if item.job.status == "processing" %}
-                    <div class="progress-container">
-                        <div class="progress-bar-row">
-                            <progress value="{{ item.job.progress }}" max="1.0"></progress>
-                            <span class="progress-text">{{ (item.job.progress * 100)|int }}%</span>
-                        </div>
-                        {% if item.job.current_time and item.job.duration %}
-                        <span class="progress-time">{{ item.job.current_time|int }}s / {{ item.job.duration|int }}s</span>
-                        {% endif %}
-                    </div>
-                    {% elif item.job.status == "completed" %}
-                    <span class="status-complete">Complete</span>
-                    {% elif item.job.status == "failed" %}
-                    <span class="status-failed">Failed</span>
-                    {% elif item.job.status == "cancelled" %}
-                    <span class="status-cancelled">Cancelled</span>
-                    {% else %}
-                    <span class="status-pending">Pending</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div class="action-buttons-container">
-                        {% if item.job.status == "completed" %}
-                            {% if item.job.output_path %}
-                            <a href="{{ url_for('ui.download_file', filename=item.job.output_path.split('/')[-1]) }}"
-                               class="circle-button download-circle-button" title="Download">
-                                <img src="/static/img/download.svg" alt="Download" width="16" height="16">
-                            </a>
-                            {% endif %}
-
-                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Log">
-                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
-                            </button>
-                        {% elif item.job.status == "processing" or item.job.status == "pending" %}
-                            <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
-                                <button type="submit" class="circle-button cancel-button" title="Cancel">
-                                    <img src="/static/img/cancel.svg" alt="Cancel" width="16" height="16">
-                                </button>
-                            </form>
-
-                            {% if item.job.status == "processing" %}
-                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
-                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
-                            </button>
-                            {% endif %}
-                        {% elif item.job.status in ["failed", "cancelled"] %}
-                            <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
-                                <img src="/static/img/log.svg" alt="Log" width="16" height="16">
-                            </button>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-
-            {% if item.job.status in ["processing", "failed", "completed", "cancelled"] %}
-            <tr class="logs-row" id="logs-{{ item.job.id }}" style="display: none;">
-                <td colspan="6">
-                    <div class="logs-container">
-                        <h3>FFmpeg Command:</h3>
-                        <pre class="ffmpeg-command" id="command-{{ item.job.id }}">Loading...</pre>
-                        <h3>FFmpeg Log:</h3>
-                        <pre class="ffmpeg-logs" id="logs-content-{{ item.job.id }}">Loading...</pre>
-
-                        {% if item.job.status == "processing" %}
-                        <div class="auto-refresh-toggle">
-                            <label>
-                                <input type="checkbox" class="auto-refresh-logs" data-job-id="{{ item.job.id }}" checked>
-                                Auto-refresh logs
-                            </label>
-                        </div>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endif %}
+            {% for item in active_jobs %}
+                {{ render_job_row(item, loop.index0) }}
             {% endfor %}
         </tbody>
     </table>
     {% else %}
+    <div class="empty-state">
+        <p>No active jobs.</p>
+    </div>
+    {% endif %}
+
+    {# Completed Jobs Section #}
+    <h2>Completed Jobs</h2>
+    {% if completed_jobs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Media</th>
+                <th>Size</th>
+                <th>Profile</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in completed_jobs %}
+                {{ render_job_row(item) }}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No completed jobs.</p>
+    </div>
+    {% endif %}
+
+    {# Failed Jobs Section #}
+    <h2>Failed/Cancelled Jobs</h2>
+    {% if failed_jobs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Media</th>
+                <th>Size</th>
+                <th>Profile</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in failed_jobs %}
+                {{ render_job_row(item) }}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No failed or cancelled jobs.</p>
+    </div>
+    {% endif %}
+    
+    {# Display a message if no jobs at all #}
+    {% if not active_jobs and not completed_jobs and not failed_jobs %}
     <div class="empty-state">
         <p>No transcoding jobs found.</p>
     </div>
@@ -209,9 +275,18 @@
 
     // Update a specific job's UI elements
     function updateJobElement(job) {
-        // Find the status element for this job
-        const statusEl = document.querySelector(`tr td.status-${job.status}[data-job-id="${job.id}"]`);
+        // Find the status element for this job - it might be in any of the three tables
+        const statusEl = document.querySelector(`tr td.status[data-job-id="${job.id}"]`);
         if (!statusEl) return;
+        
+        // Check if the job status has changed
+        const currentStatus = statusEl.className.split(' ').find(cls => cls.startsWith('status-')).replace('status-', '');
+        if (currentStatus !== job.status) {
+            // Status has changed - we need to reload the page to move the job to the correct table
+            saveOpenLogStates();
+            location.reload();
+            return;
+        }
 
         // Update the progress if it's a processing job
         const progressContainer = document.querySelector(`tr[data-job-id="${job.id}"] .progress-container`);
