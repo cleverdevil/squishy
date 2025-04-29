@@ -197,6 +197,17 @@ def cancel_job_api(job_id):
     else:
         return jsonify({"error": "Could not cancel job"}), 400
 
+@api_bp.route("/jobs/<job_id>/remove", methods=["POST"])
+def remove_job_api(job_id):
+    """Remove a completed, failed, or cancelled job."""
+    from squishy.transcoder import remove_job
+    
+    success = remove_job(job_id)
+    if success:
+        return jsonify({"status": "removed"})
+    else:
+        return jsonify({"error": "Could not remove job"}), 400
+
 @api_bp.route("/jobs/<job_id>/logs", methods=["GET"])
 def get_job_logs(job_id):
     """Get the FFmpeg logs for a specific job."""

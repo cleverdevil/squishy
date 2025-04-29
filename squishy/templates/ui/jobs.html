@@ -49,9 +49,16 @@
                     </a>
                     {% endif %}
 
-                    <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Log">
+                    <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
                         <img src="/static/img/log.svg" alt="Log" width="16" height="16">
                     </button>
+
+                    <form action="{{ url_for('ui.remove_job', job_id=item.job.id) }}" method="post" class="remove-form">
+                        <button type="submit" class="circle-button cancel-button" title="Remove"
+                                onclick="return confirm('Are you sure you want to remove this job? This cannot be undone.')">
+                            <img src="/static/img/cancel.svg" alt="Remove" width="16" height="16">
+                        </button>
+                    </form>
                 {% elif item.job.status == "processing" or item.job.status == "pending" %}
                     <form action="{{ url_for('ui.cancel_job', job_id=item.job.id) }}" method="post" class="cancel-form">
                         <button type="submit" class="circle-button cancel-button" title="Cancel">
@@ -68,6 +75,13 @@
                     <button class="circle-button logs-circle-button" data-job-id="{{ item.job.id }}" title="Show Log">
                         <img src="/static/img/log.svg" alt="Log" width="16" height="16">
                     </button>
+
+                    <form action="{{ url_for('ui.remove_job', job_id=item.job.id) }}" method="post" class="remove-form">
+                        <button type="submit" class="circle-button cancel-button" title="Remove"
+                                onclick="return confirm('Are you sure you want to remove this job? This cannot be undone.')">
+                            <img src="/static/img/cancel.svg" alt="Remove" width="16" height="16">
+                        </button>
+                    </form>
                 {% endif %}
             </div>
         </td>
@@ -148,9 +162,14 @@
     </div>
     {% endif %}
 
-    {# Failed Jobs Section #}
+    {# Failed/Cancelled Jobs Section #}
     <h2>Failed/Cancelled Jobs</h2>
-    {% if failed_jobs %}
+
+    {% if not active_jobs and not completed_jobs and not failed_jobs %}
+    <div class="empty-state">
+        <p>No cancelled or failed jobs.</p>
+    </div>
+    {% elif failed_jobs %}
     <table>
         <thead>
             <tr>
@@ -171,13 +190,6 @@
     {% else %}
     <div class="empty-state">
         <p>No failed or cancelled jobs.</p>
-    </div>
-    {% endif %}
-    
-    {# Display a message if no jobs at all #}
-    {% if not active_jobs and not completed_jobs and not failed_jobs %}
-    <div class="empty-state">
-        <p>No transcoding jobs found.</p>
     </div>
     {% endif %}
 </div>
@@ -278,7 +290,7 @@
         // Find the status element for this job - it might be in any of the three tables
         const statusEl = document.querySelector(`tr td.status[data-job-id="${job.id}"]`);
         if (!statusEl) return;
-        
+
         // Check if the job status has changed
         const currentStatus = statusEl.className.split(' ').find(cls => cls.startsWith('status-')).replace('status-', '');
         if (currentStatus !== job.status) {

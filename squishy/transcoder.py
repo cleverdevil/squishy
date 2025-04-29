@@ -1603,3 +1603,33 @@ def cancel_job(job_id: str) -> bool:
             logger.warning(f"Could not terminate process {job.process_id}: {str(e)}")
     
     return True
+
+def remove_job(job_id: str) -> bool:
+    """Remove a job from the jobs list.
+    
+    This function should only be used for completed, failed, or cancelled jobs.
+    
+    Args:
+        job_id: The ID of the job to remove
+        
+    Returns:
+        bool: True if the job was removed, False otherwise
+    """
+    job = get_job(job_id)
+    if not job:
+        logger.warning(f"Attempted to remove non-existent job: {job_id}")
+        return False
+    
+    # Only allow removing completed, failed, or cancelled jobs
+    if job.status not in ["completed", "failed", "cancelled"]:
+        logger.warning(f"Attempted to remove job {job_id} with status {job.status}")
+        return False
+    
+    # Remove the job from the global jobs dictionary
+    try:
+        del JOBS[job_id]
+        logger.info(f"Removed job {job_id} with status {job.status}")
+        return True
+    except KeyError:
+        logger.warning(f"Failed to remove job {job_id}: Job not found")
+        return False

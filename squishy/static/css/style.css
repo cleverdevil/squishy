@@ -434,7 +434,6 @@ progress {
   color: #777;
   font-size: 1.1rem;
 }
-
 .jobs-list table td:last-child form {
   width: auto;
 }
@@ -916,7 +915,7 @@ hr {
 
 /* Apply colors to the SVG icons directly in the SVG files instead */
 
-.cancel-form {
+.cancel-form, .remove-form {
   display: inline-block;
   margin: 0;
   padding: 0;

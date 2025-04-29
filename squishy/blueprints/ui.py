@@ -206,6 +206,19 @@ def cancel_job(job_id):
         flash("Could not cancel job", "error")
     
     return redirect(url_for("ui.jobs"))
+
+@ui_bp.route("/jobs/<job_id>/remove", methods=["POST"])
+def remove_job(job_id):
+    """Remove a completed, failed, or cancelled job."""
+    from squishy.transcoder import remove_job as remove_transcode_job
+    
+    success = remove_transcode_job(job_id)
+    if success:
+        flash("Job removed successfully")
+    else:
+        flash("Could not remove job", "error")
+    
+    return redirect(url_for("ui.jobs"))
 @ui_bp.route("/completed")
 def completed():
     """Display completed transcodes."""
