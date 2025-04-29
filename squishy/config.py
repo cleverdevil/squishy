@@ -50,6 +50,7 @@ class Config:
     hw_accel: Optional[str] = None  # Global hardware acceleration method
     hw_device: Optional[str] = None  # Global hardware acceleration device
     enabled_libraries: Dict[str, bool] = None  # Dictionary of library_id -> enabled status
+    log_level: str = "INFO"  # Application log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     
     def __post_init__(self):
         """Ensure dictionaries are initialized."""
@@ -160,6 +161,7 @@ def load_config(config_path: str = None) -> Config:
         hw_accel=config_data.get("hw_accel"),
         hw_device=config_data.get("hw_device"),
         enabled_libraries=enabled_libraries,
+        log_level=config_data.get("log_level", "INFO"),
     )
 
 def save_config(config: Config, config_path: str = None) -> None:
@@ -193,7 +195,8 @@ def save_config(config: Config, config_path: str = None) -> None:
         "max_concurrent_jobs": config.max_concurrent_jobs,
         "hw_accel": config.hw_accel,
         "hw_device": config.hw_device,
-        "enabled_libraries": config.enabled_libraries
+        "enabled_libraries": config.enabled_libraries,
+        "log_level": config.log_level
     }
     
     # Only include one source configuration

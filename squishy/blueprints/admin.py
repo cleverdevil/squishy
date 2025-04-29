@@ -381,6 +381,32 @@ def update_path_mappings():
     return redirect(url_for("admin.index"))
 
 
+@admin_bp.route("/update_log_level", methods=["POST"])
+def update_log_level():
+    """Update application log level."""
+    config = load_config()
+    
+    # Get the new log level
+    log_level = request.form["log_level"].upper()
+    
+    # Validate log level
+    valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    if log_level not in valid_levels:
+        flash(f"Invalid log level: {log_level}. Using INFO instead.")
+        log_level = "INFO"
+    
+    # Update config
+    config.log_level = log_level
+    save_config(config)
+    
+    # Update the current application's log level
+    import logging
+    logging.getLogger().setLevel(getattr(logging, log_level))
+    
+    flash(f"Log level updated to {log_level}")
+    return redirect(url_for("admin.index"))
+
+
 @admin_bp.route("/update_paths_and_mapping", methods=["POST"])
 def update_paths_and_mapping():
     """Update both path configuration and path mapping."""

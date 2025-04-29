@@ -784,6 +784,32 @@
     </div>
     
     <div class="admin-section">
+        <h2>Application Settings</h2>
+        <div class="card">
+            <h3>Log Level Configuration</h3>
+            <p class="help-text">Set the application log level to control the verbosity of logs.</p>
+            
+            <form action="{{ url_for('admin.update_log_level') }}" method="post">
+                <div class="form-group">
+                    <label for="log_level">Log Level</label>
+                    <select id="log_level" name="log_level">
+                        <option value="DEBUG" {% if config.log_level == "DEBUG" %}selected{% endif %}>DEBUG - Show all details including debugging information</option>
+                        <option value="INFO" {% if config.log_level == "INFO" or not config.log_level %}selected{% endif %}>INFO - Show informational messages (Default)</option>
+                        <option value="WARNING" {% if config.log_level == "WARNING" %}selected{% endif %}>WARNING - Show only warnings and errors</option>
+                        <option value="ERROR" {% if config.log_level == "ERROR" %}selected{% endif %}>ERROR - Show only errors</option>
+                        <option value="CRITICAL" {% if config.log_level == "CRITICAL" %}selected{% endif %}>CRITICAL - Show only critical errors</option>
+                    </select>
+                    <p class="help-text">More verbose levels (like DEBUG) will produce more log information and may be useful for troubleshooting. Less verbose levels (like WARNING or ERROR) will produce fewer logs.</p>
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit" class="button">Update Log Level</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="admin-section">
         <h2>Hardware Acceleration</h2>
         <div class="card">
             <h3>Global Hardware Acceleration Settings</h3>

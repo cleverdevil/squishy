@@ -215,18 +215,32 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                     logging.debug(f"Skipping disabled Jellyfin library: {library.get('Name', 'Unknown')} (id: {library_id})")
                     stats["skipped_libraries"] += 1
 
-    # Fetch movies
-    response = requests.get(f"{url}/Items", params={
-        "IncludeItemTypes": "Movie",
-        "Recursive": "true",
-        "Fields": "Path,Year",
-        "ParentId": ",".join(enabled_library_ids) if enabled_library_ids else None,
-    }, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-        movie_items = data.get("Items", [])
-        stats["total_movies_found"] = len(movie_items)
+    # Fetch movies - for Jellyfin API, we need to query each library separately
+    movie_items = []
+    
+    # If no enabled libraries, skip scanning
+    if not enabled_library_ids:
+        logging.warning("No enabled Jellyfin libraries found to scan")
+    else:
+        for library_id in enabled_library_ids:
+            response = requests.get(f"{url}/Items", params={
+                "IncludeItemTypes": "Movie",
+                "Recursive": "true",
+                "Fields": "Path,Year",
+                "ParentId": library_id,
+            }, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("Items", [])
+                movie_items.extend(items)
+                logging.debug(f"Found {len(items)} movies in library {library_id}")
+            else:
+                logging.error(f"Failed to retrieve movies from library {library_id}: HTTP {response.status_code}")
+    
+    stats["total_movies_found"] = len(movie_items)
+    
+    if movie_items:
 
         for item in movie_items:
             if "Path" in item:
@@ -252,17 +266,27 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                     stats["path_not_found"] += 1
                     stats["skipped_movies"] += 1
 
-    # First fetch TV series to get their metadata
-    response = requests.get(f"{url}/Items", params={
-        "IncludeItemTypes": "Series",
-        "Recursive": "true",
-        "Fields": "Path,Year",
-        "ParentId": ",".join(enabled_library_ids) if enabled_library_ids else None,
-    }, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-        for item in data.get("Items", []):
+    # First fetch TV series to get their metadata - query each library separately
+    series_items = []
+    
+    if enabled_library_ids:
+        for library_id in enabled_library_ids:
+            response = requests.get(f"{url}/Items", params={
+                "IncludeItemTypes": "Series",
+                "Recursive": "true",
+                "Fields": "Path,Year",
+                "ParentId": library_id,
+            }, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("Items", [])
+                series_items.extend(items)
+                logging.debug(f"Found {len(items)} TV series in library {library_id}")
+            else:
+                logging.error(f"Failed to retrieve TV series from library {library_id}: HTTP {response.status_code}")
+    
+    for item in series_items:
             series_id = item["Id"]
             show_id = str(uuid.uuid4())
             shows_by_id[series_id] = TVShow(
@@ -273,64 +297,73 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             )
             TV_SHOWS[show_id] = shows_by_id[series_id]
 
-    # Now fetch episodes
-    response = requests.get(f"{url}/Items", params={
-        "IncludeItemTypes": "Episode",
-        "Recursive": "true",
-        "Fields": "Path,SeriesName,SeasonName,ParentIndexNumber,IndexNumber,Year",
-        "ParentId": ",".join(enabled_library_ids) if enabled_library_ids else None,
-    }, headers=headers)
+    # Now fetch episodes - query each library separately
+    episode_items = []
+    
+    if enabled_library_ids:
+        for library_id in enabled_library_ids:
+            response = requests.get(f"{url}/Items", params={
+                "IncludeItemTypes": "Episode",
+                "Recursive": "true",
+                "Fields": "Path,SeriesName,SeasonName,ParentIndexNumber,IndexNumber,Year",
+                "ParentId": library_id,
+            }, headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("Items", [])
+                episode_items.extend(items)
+                logging.debug(f"Found {len(items)} episodes in library {library_id}")
+            else:
+                logging.error(f"Failed to retrieve episodes from library {library_id}: HTTP {response.status_code}")
+    
+    stats["total_episodes_found"] = len(episode_items)
 
-    if response.status_code == 200:
-        data = response.json()
-        episode_items = data.get("Items", [])
-        stats["total_episodes_found"] = len(episode_items)
+    for item in episode_items:
+        if "Path" in item and "SeriesId" in item:
+            media_id = str(uuid.uuid4())
+            series_id = item["SeriesId"]
 
-        for item in episode_items:
-            if "Path" in item and "SeriesId" in item:
-                media_id = str(uuid.uuid4())
-                series_id = item["SeriesId"]
+            # Apply path mapping to convert media server path to local path
+            mapped_path = apply_path_mapping(item["Path"])
 
-                # Apply path mapping to convert media server path to local path
-                mapped_path = apply_path_mapping(item["Path"])
+            # Only add if the path exists
+            if not mapped_path or not os.path.exists(mapped_path) or series_id not in shows_by_id:
+                logging.debug(f"Episode path not found or series ID not found: {mapped_path}")
+                stats["path_not_found"] += 1
+                stats["skipped_episodes"] += 1
+                continue
 
-                # Only add if the path exists
-                if not mapped_path or not os.path.exists(mapped_path) or series_id not in shows_by_id:
-                    logging.debug(f"Episode path not found or series ID not found: {mapped_path}")
-                    stats["path_not_found"] += 1
-                    stats["skipped_episodes"] += 1
-                    continue
+            show = shows_by_id[series_id]
+            season_num = item.get("ParentIndexNumber", 0)
+            episode_num = item.get("IndexNumber")
 
-                show = shows_by_id[series_id]
-                season_num = item.get("ParentIndexNumber", 0)
-                episode_num = item.get("IndexNumber")
+            # Create the episode
+            episode = Episode(
+                id=media_id,
+                season_number=season_num,
+                episode_number=episode_num,
+                title=item.get("Name", ""),
+                year=item.get("ProductionYear"),
+                path=mapped_path
+            )
+            show.add_episode(episode)
 
-                # Create the episode
-                episode = Episode(
-                    id=media_id,
-                    season_number=season_num,
-                    episode_number=episode_num,
-                    title=item.get("Name", ""),
-                    year=item.get("ProductionYear"),
-                    path=mapped_path
-                )
-                show.add_episode(episode)
-
-                # Also create a MediaItem for the episode
-                media_item = MediaItem(
-                    id=media_id,
-                    title=item.get("Name", ""),
-                    year=item.get("ProductionYear"),
-                    type="episode",
-                    path=mapped_path,
-                    poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
-                    show_id=show.id,
-                    season_number=season_num,
-                    episode_number=episode_num
-                )
-                media_items.append(media_item)
-                MEDIA[media_id] = media_item
-                stats["added_episodes"] += 1
+            # Also create a MediaItem for the episode
+            media_item = MediaItem(
+                id=media_id,
+                title=item.get("Name", ""),
+                year=item.get("ProductionYear"),
+                type="episode",
+                path=mapped_path,
+                poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
+                show_id=show.id,
+                season_number=season_num,
+                episode_number=episode_num
+            )
+            media_items.append(media_item)
+            MEDIA[media_id] = media_item
+            stats["added_episodes"] += 1
 
     # Log statistics
     logging.info(f"Jellyfin scan statistics: {stats}")

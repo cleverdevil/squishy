@@ -72,7 +72,12 @@ def create_app(test_config=None):
 
 def main():
     """Run the application."""
-    # Logging is configured in run.py
+    # Logging is configured in run.py, but update here in case app.py is run directly
+    config = load_config()
+    log_level = os.environ.get('LOG_LEVEL', config.log_level).upper()
+    logging.getLogger().setLevel(getattr(logging, log_level))
+    
+    # Create Flask app
     app = create_app()
 
     # Run with SocketIO instead of Flask's built-in server
