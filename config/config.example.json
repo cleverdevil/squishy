@@ -20,21 +20,25 @@
       "resolution": "3840x2160",
       "codec": "h264",
       "container": "mkv",
-      "quality": "high"
+      "quality": "high",
+      "allow_hw_failover": true
     },
     {
       "name": "medium",
       "resolution": "1920x1080",
       "codec": "h264",
       "container": "mkv",
-      "quality": "medium"
+      "quality": "medium",
+      "hw_accel": "vaapi",
+      "allow_hw_failover": true
     },
     {
       "name": "low",
       "resolution": "1280x720",
       "codec": "h264",
       "container": "mp4",
-      "quality": "low"
+      "quality": "low",
+      "allow_hw_failover": true
     },
     {
       "name": "potato",
@@ -42,7 +46,8 @@
       "codec": "h264",
       "container": "mp4",
       "quality": "low",
-      "bitrate": "1M"
+      "bitrate": "1M",
+      "allow_hw_failover": false
     }
   ]
 }

@@ -26,6 +26,9 @@ transcoding, and downloading your media as frictionless as possible:
   either MKV or MP4 with 4K, 1080p, 720p, and 480p respectively.
 * Customize and create profiles to let you dial-in your personal preferences by
   selecting custom resolutions, bitrates, and codecs such as HEVC and AV1.
+* Hardware acceleration support with automatic failover to software encoding when
+  hardware acceleration fails. Configurable per transcoding profile to either allow
+  or prevent failover based on your requirements.
 * Direct download links for your transcoded media that work with any browser or
   media player app.
 

@@ -18,6 +18,7 @@ class TranscodeProfile:
     bitrate: Optional[str] = None
     hw_accel: Optional[str] = None
     hw_device: Optional[str] = None
+    allow_hw_failover: bool = True  # Allow fallback to software encoding if hardware acceleration fails
     
     @classmethod
     def from_dict(cls, data):
@@ -31,6 +32,7 @@ class TranscodeProfile:
             bitrate=data.get("bitrate"),
             hw_accel=data.get("hw_accel"),
             hw_device=data.get("hw_device"),
+            allow_hw_failover=data.get("allow_hw_failover", True),  # Default to True for backward compatibility
         )
 
 @dataclass
@@ -177,6 +179,7 @@ def save_config(config: Config, config_path: str = None) -> None:
             "codec": profile.codec,
             "container": profile.container,
             "quality": profile.quality,
+            "allow_hw_failover": profile.allow_hw_failover,  # Always include this field
         }
         if profile.bitrate:
             profile_dict["bitrate"] = profile.bitrate

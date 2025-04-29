@@ -716,8 +716,19 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                         hw_accel_error = True
                         break
                 
-                # If hardware acceleration failed, try alternate approach first if it's VAAPI
+                # Check if the profile allows hardware acceleration failover
+                allow_failover = profile.allow_hw_failover
+                
+                # If hardware acceleration failed
                 if hw_accel_error and active_hw_accel:
+                    # Add log message if failover is not allowed
+                    if not allow_failover:
+                        err_msg = f"Hardware acceleration with {active_hw_accel} failed and failover to software is not allowed by profile"
+                        logger.error(err_msg)
+                        job.ffmpeg_logs.append(f"ERROR: {err_msg}")
+                        raise RuntimeError(err_msg)
+                
+                    # If we're here, failover is allowed
                     if active_hw_accel == "vaapi":
                         # Try alternate VAAPI approach first before falling back to software
                         logger.warning(f"Standard VAAPI acceleration failed, trying alternate VAAPI approach")
