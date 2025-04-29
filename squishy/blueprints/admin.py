@@ -68,6 +68,9 @@ def add_profile():
         bitrate = request.form.get("bitrate")
         hw_accel = request.form.get("hw_accel")
         hw_device = request.form.get("hw_device")
+        
+        # Handle the hardware acceleration failover checkbox
+        allow_hw_failover = request.form.get("allow_hw_failover") == "on"
 
         config = load_config()
         config.profiles[name] = TranscodeProfile(
@@ -79,6 +82,7 @@ def add_profile():
             bitrate=bitrate,
             hw_accel=hw_accel if hw_accel else None,
             hw_device=hw_device if hw_device else None,
+            allow_hw_failover=allow_hw_failover,
         )
         save_config(config)
 
@@ -110,6 +114,9 @@ def edit_profile(name):
         hw_device = request.form.get("hw_device")
         profile.hw_accel = hw_accel if hw_accel else None
         profile.hw_device = hw_device if hw_device else None
+        
+        # Handle the hardware acceleration failover checkbox
+        profile.allow_hw_failover = request.form.get("allow_hw_failover") == "on"
 
         save_config(config)
 

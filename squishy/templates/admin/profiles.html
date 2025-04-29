@@ -22,7 +22,8 @@
                 <th>Codec</th>
                 <th>Container</th>
                 <th>Quality</th>
-                <th>Bitrate</th>
+                <th>HW Accel</th>
+                <th>Failover</th>
                 <th class="align-right">Actions</th>
             </tr>
         </thead>
@@ -34,7 +35,22 @@
                 <td>{{ profile.codec }}</td>
                 <td>{{ profile.container }}</td>
                 <td>{{ profile.quality }}</td>
-                <td>{{ profile.bitrate or "-" }}</td>
+                <td>
+                    {% if profile.hw_accel == "inherit" or profile.hw_accel is none %}
+                        <span class="hw-inherit">Inherit</span>
+                    {% elif profile.hw_accel %}
+                        <span class="hw-enabled">{{ profile.hw_accel }}</span>
+                    {% else %}
+                        <span class="hw-disabled">Off</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if profile.allow_hw_failover %}
+                        <span class="failover-enabled">Enabled</span>
+                    {% else %}
+                        <span class="failover-disabled">Disabled</span>
+                    {% endif %}
+                </td>
                 <td class="align-right">
                     <div class="action-buttons" style="">
                         <a href="{{ url_for('admin.edit_profile', name=profile.name) }}" class="button small">Edit</a>

@@ -1270,6 +1270,55 @@ input:checked + .toggle-slider:before {
   margin-top: 0.25rem;
 }
 
+/* Checkbox group */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkbox-group label {
+  font-weight: 500;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+/* Hardware acceleration status indicators */
+.hw-inherit, .hw-enabled, .hw-disabled,
+.failover-enabled, .failover-disabled {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.hw-inherit {
+  background-color: #3498db25;
+  color: #3498db;
+}
+
+.hw-enabled {
+  background-color: #27ae6025;
+  color: #27ae60;
+}
+
+.hw-disabled {
+  background-color: #7f8c8d25;
+  color: #7f8c8d;
+}
+
+.failover-enabled {
+  background-color: #27ae6025;
+  color: #27ae60;
+}
+
+.failover-disabled {
+  background-color: #e74c3c25;
+  color: #e74c3c;
+}
+
 /* Media queries for library toggles */
 @media (max-width: 768px) {
   .library-group {

@@ -74,6 +74,14 @@
             <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
         </div>
         
+        <div class="form-group" id="hw_failover_group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="allow_hw_failover" name="allow_hw_failover" checked>
+                <label for="allow_hw_failover">Allow Fallback to Software Encoding</label>
+            </div>
+            <p class="help-text">If enabled, jobs will automatically fall back to software encoding when hardware acceleration fails. If disabled, jobs will fail when hardware acceleration encounters an error.</p>
+        </div>
+        
         <div class="form-actions">
             <button type="submit">Save Profile</button>
             <a href="{{ url_for('admin.list_profiles') }}" class="button secondary">Cancel</a>
@@ -83,6 +91,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const hwAccelSelect = document.getElementById('hw_accel');
     const hwDeviceGroup = document.getElementById('hw_device_group');
+    const hwFailoverGroup = document.getElementById('hw_failover_group');
     
     hwAccelSelect.addEventListener('change', function() {
         // Show device field only for methods that need it
@@ -95,7 +104,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('hw_device').value = '';
             }
         }
+        
+        // Show failover option only when hardware acceleration is enabled or inherited
+        if (this.value === '' || this.value === null) {
+            hwFailoverGroup.style.display = 'none';
+        } else {
+            hwFailoverGroup.style.display = 'block';
+        }
     });
+    
+    // Initial check
+    if (hwAccelSelect.value === '') {
+        hwFailoverGroup.style.display = 'none';
+    }
 });
 </script>
     </form>
