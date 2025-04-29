@@ -4,14 +4,16 @@
 
 {% block content %}
 <div class="media-library">
-    <h1>Media Library</h1>
-    
-    <div class="search-container">
-        <div class="search-form">
-            <input type="text" id="searchInput" placeholder="Search titles..." value="{{ search_query }}">
-            <button type="button" id="searchButton">Search</button>
-            <a href="javascript:void(0)" id="clearSearch" class="clear-search" style="display:none">Clear</a>
-            <div class="loader" id="searchLoader" style="display:none"></div>
+    <div class="library-header">
+        <h1>Media Library</h1>
+        
+        <div class="search-container">
+            <div class="search-form">
+                <input type="text" id="searchInput" placeholder="Search titles..." value="{{ search_query }}">
+                <button type="button" id="searchButton">Search</button>
+                <a href="javascript:void(0)" id="clearSearch" class="clear-search" style="display:none">Clear</a>
+                <div class="loader" id="searchLoader" style="display:none"></div>
+            </div>
         </div>
     </div>
     
@@ -100,36 +102,53 @@
         color: #777;
     }
     
+    .library-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .library-header h1 {
+        margin: 0;
+    }
+    
     .search-container {
-        margin: 1.5rem 0;
+        margin: 0;
     }
     
     .search-form {
         display: flex;
-        max-width: 500px;
-        margin: 0 auto;
+        width: 320px;
         align-items: center;
+        margin-right: 0; /* Align with right edge */
     }
     
     .search-form input {
         flex: 1;
-        padding: 0.7rem;
+        padding: 0.5rem 0.7rem;
         border: 1px solid #ddd;
         border-radius: 4px 0 0 4px;
-        font-size: 1rem;
+        font-size: 0.9rem;
+        height: 38px;
+        box-sizing: border-box;
     }
     
     .search-form button {
         border-radius: 0 4px 4px 0;
         margin-left: -1px;
+        height: 38px;
+        padding: 0 0.9rem;
+        font-size: 0.9rem;
     }
     
     .clear-search {
         display: inline-block;
-        margin-left: 1rem;
-        padding: 0.7rem 1rem;
+        margin-left: 0.5rem;
+        padding: 0.4rem 0.5rem;
         color: var(--primary-color);
         text-decoration: none;
+        font-size: 0.85rem;
     }
     
     .clear-search:hover {
@@ -137,13 +156,13 @@
     }
     
     .loader {
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid var(--secondary-color);
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid var(--secondary-color);
         border-radius: 50%;
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
         animation: spin 1s linear infinite;
-        margin-left: 12px;
+        margin-left: 8px;
         display: inline-block;
         vertical-align: middle;
     }
@@ -161,6 +180,24 @@
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .library-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .search-container {
+            margin-top: 1rem;
+            width: 100%;
+        }
+        
+        .search-form {
+            width: 100%;
+            max-width: 100%;
+        }
     }
     
     /* Pagination styles */
