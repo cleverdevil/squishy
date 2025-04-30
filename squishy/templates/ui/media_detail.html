@@ -19,9 +19,88 @@
 
         <div class="media-info">
             <h1>{{ media.display_name }}</h1>
-            <p class="media-type">{{ media.type|capitalize }}</p>
-            <p class="media-path">{{ media.path }}</p>
-
+            
+            <div class="media-meta">
+                <span class="media-type-pill {% if media.type == 'movie' %}movie-type{% else %}tv-type{% endif %}">
+                    {{ media.type|capitalize }}
+                </span>
+                
+                {% if media_info.video and media_info.video[0].width >= 3840 %}
+                <span class="resolution-pill">4K</span>
+                {% elif media_info.video and media_info.video[0].width >= 1920 %}
+                <span class="resolution-pill">HD</span>
+                {% endif %}
+                
+                {% if media_info.hdr_info %}
+                <span class="hdr-pill">{{ media_info.hdr_info.type }}</span>
+                {% endif %}
+            </div>
+            
+            <p class="media-description">
+                {% if media.overview %}
+                    {{ media.overview }}
+                {% else %}
+                    {{ media.title }} {% if media.year %}({{ media.year }}){% endif %} - 
+                    {% if media_info.format.duration %}
+                    {{ '%0.1f'|format(media_info.format.duration / 60) }} minutes, 
+                    {% endif %}
+                    {{ file_size }}
+                {% endif %}
+            </p>
+            
+            {% if media.genres or media.directors or media.actors or media.release_date or media.rating or media.content_rating or media.studio %}
+            <div class="media-metadata">
+                {% if media.genres %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Genres:</span>
+                    <span class="metadata-value">{{ media.genres|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if media.directors %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Director{% if media.directors|length > 1 %}s{% endif %}:</span>
+                    <span class="metadata-value">{{ media.directors|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if media.actors %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Cast:</span>
+                    <span class="metadata-value">{{ media.actors|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if media.release_date %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Released:</span>
+                    <span class="metadata-value">{{ media.release_date[:10] }}</span>
+                </div>
+                {% endif %}
+                
+                {% if media.rating %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Rating:</span>
+                    <span class="metadata-value">{{ '%0.1f'|format(media.rating) }}/10</span>
+                </div>
+                {% endif %}
+                
+                {% if media.content_rating %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Content Rating:</span>
+                    <span class="metadata-value">{{ media.content_rating }}</span>
+                </div>
+                {% endif %}
+                
+                {% if media.studio %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Studio:</span>
+                    <span class="metadata-value">{{ media.studio }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            
             <form action="{{ url_for('ui.transcode', media_id=media.id) }}" method="post" class="transcode-form">
                 <div class="form-group">
                     <label for="profile">Profile</label>
@@ -35,5 +114,341 @@
             </form>
         </div>
     </div>
+
+    <h1>Technical Information</h1>
+
+    <div class="admin-section">
+        <h2>File Information</h2>
+        <div class="card">
+            <table>
+                <tbody>
+                    <tr>
+                        <th>File Path</th>
+                        <td>{{ media.path }}</td>
+                    </tr>
+                    <tr>
+                        <th>File Size</th>
+                        <td>{{ file_size }}</td>
+                    </tr>
+                    <tr>
+                        <th>Format</th>
+                        <td>{{ media_info.format.format_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Duration</th>
+                        <td>{{ '%0.2f'|format(media_info.format.duration / 60) }} minutes</td>
+                    </tr>
+                    <tr>
+                        <th>Bitrate</th>
+                        <td>{{ '%0.2f'|format(media_info.format.bit_rate / 1000000) }} Mbps</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if media_info.video %}
+    <div class="admin-section">
+        <h2>Video</h2>
+        <div class="card">
+            {% for video in media_info.video %}
+            <table>
+                <tbody>
+                    <tr>
+                        <th>Codec</th>
+                        <td>{{ video.codec }} ({{ video.codec_description }})</td>
+                    </tr>
+                    <tr>
+                        <th>Resolution</th>
+                        <td>{{ video.width }}x{{ video.height }}</td>
+                    </tr>
+                    <tr>
+                        <th>Aspect Ratio</th>
+                        <td>{{ video.aspect_ratio }}</td>
+                    </tr>
+                    <tr>
+                        <th>Frame Rate</th>
+                        <td>{{ video.frame_rate }} fps</td>
+                    </tr>
+                    <tr>
+                        <th>Bit Depth</th>
+                        <td>{{ video.bit_depth }} bit</td>
+                    </tr>
+                    <tr>
+                        <th>Pixel Format</th>
+                        <td>{{ video.pixel_format }}</td>
+                    </tr>
+                    <tr>
+                        <th>Profile</th>
+                        <td>{{ video.profile }}</td>
+                    </tr>
+                    {% if video.color_space or video.color_transfer or video.color_primaries %}
+                    <tr>
+                        <th>Color Space</th>
+                        <td>{{ video.color_space }}</td>
+                    </tr>
+                    <tr>
+                        <th>Color Transfer</th>
+                        <td>{{ video.color_transfer }}</td>
+                    </tr>
+                    <tr>
+                        <th>Color Primaries</th>
+                        <td>{{ video.color_primaries }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if media_info.hdr_info %}
+    <div class="admin-section">
+        <h2>HDR Information</h2>
+        <div class="card">
+            <table>
+                <tbody>
+                    <tr>
+                        <th>HDR Type</th>
+                        <td>{{ media_info.hdr_info.type }}</td>
+                    </tr>
+                    {% if media_info.hdr_info.dv_profile %}
+                    <tr>
+                        <th>Dolby Vision Profile</th>
+                        <td>{{ media_info.hdr_info.dv_profile }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if media_info.hdr_info.dv_level %}
+                    <tr>
+                        <th>Dolby Vision Level</th>
+                        <td>{{ media_info.hdr_info.dv_level }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if media_info.hdr_info.master_display %}
+                    <tr>
+                        <th>Master Display</th>
+                        <td>{{ media_info.hdr_info.master_display }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if media_info.hdr_info.max_content %}
+                    <tr>
+                        <th>Max Content Light Level</th>
+                        <td>{{ media_info.hdr_info.max_content }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if media_info.hdr_info.max_average %}
+                    <tr>
+                        <th>Max Average Light Level</th>
+                        <td>{{ media_info.hdr_info.max_average }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if media_info.audio %}
+    <div class="admin-section">
+        <h2>Audio</h2>
+        <div class="card">
+            {% for audio in media_info.audio %}
+            <table>
+                <tbody>
+                    <tr>
+                        <th>Codec</th>
+                        <td>{{ audio.codec }} ({{ audio.codec_description }})</td>
+                    </tr>
+                    <tr>
+                        <th>Channels</th>
+                        <td>{{ audio.channels }} ({{ audio.channel_layout }})</td>
+                    </tr>
+                    <tr>
+                        <th>Sample Rate</th>
+                        <td>{{ audio.sample_rate }} Hz</td>
+                    </tr>
+                    {% if audio.bit_rate %}
+                    <tr>
+                        <th>Bit Rate</th>
+                        <td>{{ '%0.2f'|format(audio.bit_rate|int / 1000) }} kbps</td>
+                    </tr>
+                    {% endif %}
+                    {% if audio.language %}
+                    <tr>
+                        <th>Language</th>
+                        <td>{{ audio.language }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if audio.title %}
+                    <tr>
+                        <th>Title</th>
+                        <td>{{ audio.title }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if not loop.last %}<div class="separator"></div>{% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if media_info.subtitle %}
+    <div class="admin-section">
+        <h2>Subtitles</h2>
+        <div class="card">
+            {% for subtitle in media_info.subtitle %}
+            <table>
+                <tbody>
+                    <tr>
+                        <th>Codec</th>
+                        <td>{{ subtitle.codec }}</td>
+                    </tr>
+                    {% if subtitle.language %}
+                    <tr>
+                        <th>Language</th>
+                        <td>{{ subtitle.language }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if subtitle.title %}
+                    <tr>
+                        <th>Title</th>
+                        <td>{{ subtitle.title }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if not loop.last %}<div class="separator"></div>{% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
+
+<style>
+.separator {
+    margin: 1rem 0;
+    border-top: 1px dashed #ddd;
+}
+
+.media-detail h1 {
+    margin: 2rem 0 1rem;
+    color: var(--primary-color);
+}
+
+.media-detail .admin-section {
+    margin-bottom: 2rem;
+}
+
+.media-detail .admin-section h2 {
+    margin-bottom: 1rem;
+    color: var(--dark-color);
+}
+
+.media-detail .card {
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+}
+
+.media-detail table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.media-detail table th,
+.media-detail table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.media-detail table th {
+    width: 30%;
+    font-weight: bold;
+    color: var(--dark-color);
+}
+
+/* New styles for the media header */
+.media-header {
+    align-items: flex-start;
+}
+
+.media-info h1 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.media-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.media-type-pill,
+.resolution-pill,
+.hdr-pill {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.movie-type {
+    background-color: #3498db25;
+    color: #3498db;
+}
+
+.tv-type {
+    background-color: #9b59b625;
+    color: #9b59b6;
+}
+
+.resolution-pill {
+    background-color: #27ae6025;
+    color: #27ae60;
+}
+
+.hdr-pill {
+    background-color: #f39c1225;
+    color: #f39c12;
+}
+
+.media-description {
+    margin-bottom: 1rem;
+    color: #555;
+    line-height: 1.5;
+}
+
+.media-metadata {
+    margin-bottom: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.5rem 1rem;
+}
+
+.metadata-item {
+    display: flex;
+    align-items: baseline;
+}
+
+.metadata-label {
+    font-weight: 500;
+    color: var(--dark-color);
+    margin-right: 0.5rem;
+    white-space: nowrap;
+}
+
+.metadata-value {
+    color: #555;
+}
+
+.transcode-form {
+    margin-top: 1rem;
+}
+</style>
 {% endblock %}

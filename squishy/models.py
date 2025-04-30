@@ -13,6 +13,8 @@ class Episode:
     title: str = ""
     year: Optional[int] = None
     path: str = ""
+    overview: Optional[str] = None
+    air_date: Optional[str] = None
     
     @property
     def display_name(self) -> str:
@@ -47,6 +49,16 @@ class TVShow:
     year: Optional[int] = None
     poster_url: Optional[str] = None
     seasons: Dict[int, Season] = field(default_factory=dict)
+    # Extended metadata
+    overview: Optional[str] = None
+    tagline: Optional[str] = None
+    genres: List[str] = field(default_factory=list)
+    creators: List[str] = field(default_factory=list)
+    actors: List[str] = field(default_factory=list)
+    first_air_date: Optional[str] = None
+    rating: Optional[float] = None
+    content_rating: Optional[str] = None
+    studio: Optional[str] = None
     
     @property
     def display_name(self) -> str:
@@ -82,6 +94,16 @@ class MediaItem:
     show_id: Optional[str] = None
     season_number: Optional[int] = None
     episode_number: Optional[int] = None
+    # Extended metadata
+    overview: Optional[str] = None
+    tagline: Optional[str] = None
+    genres: List[str] = field(default_factory=list)
+    directors: List[str] = field(default_factory=list)
+    actors: List[str] = field(default_factory=list)
+    release_date: Optional[str] = None
+    rating: Optional[float] = None
+    content_rating: Optional[str] = None
+    studio: Optional[str] = None
     
     @property
     def display_name(self) -> str:

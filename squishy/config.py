@@ -42,6 +42,7 @@ class Config:
     media_path: str
     transcode_path: str
     ffmpeg_path: str = "/usr/bin/ffmpeg"
+    ffprobe_path: str = "/usr/bin/ffprobe"  # Added ffprobe path
     jellyfin_url: Optional[str] = None
     jellyfin_api_key: Optional[str] = None
     plex_url: Optional[str] = None
@@ -73,6 +74,7 @@ def load_config(config_path: str = None) -> Config:
         "media_path": "/media",
         "transcode_path": "/app/data/transcodes",
         "ffmpeg_path": "/usr/bin/ffmpeg",
+        "ffprobe_path": "/usr/bin/ffprobe",  # Added default ffprobe path
         "path_mappings": {},
         "profiles": [
             {
@@ -153,6 +155,7 @@ def load_config(config_path: str = None) -> Config:
         media_path=media_path or default_config["media_path"],
         transcode_path=config_data.get("transcode_path", default_config["transcode_path"]),
         ffmpeg_path=config_data.get("ffmpeg_path", default_config["ffmpeg_path"]),
+        ffprobe_path=config_data.get("ffprobe_path", default_config["ffprobe_path"]),  # Added ffprobe path
         jellyfin_url=config_data.get("jellyfin_url"),
         jellyfin_api_key=config_data.get("jellyfin_api_key"),
         plex_url=config_data.get("plex_url"),
@@ -193,6 +196,7 @@ def save_config(config: Config, config_path: str = None) -> None:
         "media_path": config.media_path,
         "transcode_path": config.transcode_path,
         "ffmpeg_path": config.ffmpeg_path,
+        "ffprobe_path": config.ffprobe_path,  # Added ffprobe path
         "profiles": profiles_data,
         "path_mappings": config.path_mappings,
         "max_concurrent_jobs": config.max_concurrent_jobs,

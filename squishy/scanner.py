@@ -226,7 +226,7 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             response = requests.get(f"{url}/Items", params={
                 "IncludeItemTypes": "Movie",
                 "Recursive": "true",
-                "Fields": "Path,Year",
+                "Fields": "Path,Year,Overview,Genres,Studios,OfficialRating,CommunityRating,PremiereDate,Taglines,People",
                 "ParentId": library_id,
             }, headers=headers)
             
@@ -251,6 +251,31 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
 
                 # Only add if the path exists
                 if mapped_path and os.path.exists(mapped_path):
+                    # Extract directors and actors
+                    directors = []
+                    actors = []
+                    if "People" in item:
+                        for person in item.get("People", []):
+                            if person.get("Type") == "Director":
+                                directors.append(person.get("Name"))
+                            elif person.get("Type") == "Actor":
+                                actors.append(person.get("Name"))
+                    
+                    # Get studio
+                    studio = None
+                    if item.get("Studios") and len(item.get("Studios")) > 0:
+                        studio = item.get("Studios")[0].get("Name")
+                    
+                    # Handle taglines safely
+                    tagline = None
+                    if item.get("Taglines") and isinstance(item.get("Taglines"), list) and len(item.get("Taglines")) > 0:
+                        tagline = item.get("Taglines")[0]
+                    
+                    # Handle genres safely
+                    genres = []
+                    if item.get("Genres") and isinstance(item.get("Genres"), list):
+                        genres = [g.get("Name") for g in item.get("Genres") if isinstance(g, dict) and g.get("Name")]
+                    
                     media_item = MediaItem(
                         id=media_id,
                         title=item.get("Name", ""),
@@ -258,6 +283,15 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         type="movie",
                         path=mapped_path,
                         poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
+                        overview=item.get("Overview"),
+                        tagline=tagline,
+                        genres=genres,
+                        directors=directors,
+                        actors=actors[:5],  # Limit to top 5 actors
+                        release_date=item.get("PremiereDate"),
+                        rating=item.get("CommunityRating"),
+                        content_rating=item.get("OfficialRating"),
+                        studio=studio
                     )
                     media_items.append(media_item)
                     MEDIA[media_id] = media_item
@@ -274,7 +308,7 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             response = requests.get(f"{url}/Items", params={
                 "IncludeItemTypes": "Series",
                 "Recursive": "true",
-                "Fields": "Path,Year",
+                "Fields": "Path,Year,Overview,Genres,Studios,OfficialRating,CommunityRating,PremiereDate,Taglines,People",
                 "ParentId": library_id,
             }, headers=headers)
             
@@ -289,11 +323,48 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
     for item in series_items:
             series_id = item["Id"]
             show_id = str(uuid.uuid4())
+            
+            # Extract directors and actors
+            creators = []
+            actors = []
+            if "People" in item:
+                for person in item.get("People", []):
+                    if person.get("Type") == "Director" or person.get("Type") == "Creator":
+                        creators.append(person.get("Name"))
+                    elif person.get("Type") == "Actor":
+                        actors.append(person.get("Name"))
+            
+            # Get studio
+            studio = None
+            if item.get("Studios") and isinstance(item.get("Studios"), list) and len(item.get("Studios")) > 0:
+                studio_obj = item.get("Studios")[0]
+                if isinstance(studio_obj, dict):
+                    studio = studio_obj.get("Name")
+            
+            # Handle taglines safely
+            tagline = None
+            if item.get("Taglines") and isinstance(item.get("Taglines"), list) and len(item.get("Taglines")) > 0:
+                tagline = item.get("Taglines")[0]
+            
+            # Handle genres safely
+            genres = []
+            if item.get("Genres") and isinstance(item.get("Genres"), list):
+                genres = [g.get("Name") for g in item.get("Genres") if isinstance(g, dict) and g.get("Name")]
+                
             shows_by_id[series_id] = TVShow(
                 id=show_id,
                 title=item.get("Name", ""),
                 year=item.get("ProductionYear"),
                 poster_url=f"{url.rstrip('/')}/Items/{series_id}/Images/Primary?API_KEY={api_key}",
+                overview=item.get("Overview"),
+                tagline=tagline,
+                genres=genres,
+                creators=creators,
+                actors=actors[:5],  # Limit to top 5 actors
+                first_air_date=item.get("PremiereDate"),
+                rating=item.get("CommunityRating"),
+                content_rating=item.get("OfficialRating"),
+                studio=studio
             )
             TV_SHOWS[show_id] = shows_by_id[series_id]
 
@@ -305,7 +376,7 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             response = requests.get(f"{url}/Items", params={
                 "IncludeItemTypes": "Episode",
                 "Recursive": "true",
-                "Fields": "Path,SeriesName,SeasonName,ParentIndexNumber,IndexNumber,Year",
+                "Fields": "Path,SeriesName,SeasonName,ParentIndexNumber,IndexNumber,Year,Overview,PremiereDate",
                 "ParentId": library_id,
             }, headers=headers)
             
@@ -345,7 +416,9 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 episode_number=episode_num,
                 title=item.get("Name", ""),
                 year=item.get("ProductionYear"),
-                path=mapped_path
+                path=mapped_path,
+                overview=item.get("Overview"),
+                air_date=item.get("PremiereDate")
             )
             show.add_episode(episode)
 
@@ -359,7 +432,9 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                 show_id=show.id,
                 season_number=season_num,
-                episode_number=episode_num
+                episode_number=episode_num,
+                overview=item.get("Overview"),
+                release_date=item.get("PremiereDate")
             )
             media_items.append(media_item)
             MEDIA[media_id] = media_item
