@@ -66,20 +66,24 @@ def show_detail(show_id):
     episode_count = 0
     episode_ids = []
     valid_episode_ids = set()
-    
+
     for season in show.seasons.values():
         for episode_id, episode in season.episodes.items():
             episode_count += 1
             # Verify each episode exists in MEDIA dictionary
-            media_item = get_media(episode_id)
+            media_item = get_media(episode.id)
             if not media_item:
-                print(f"WARNING: Episode {episode_id} from show {show_id} not found in MEDIA dictionary")
+                print(
+                    f"WARNING: Episode {episode.id} from show {show_id} not found in MEDIA dictionary"
+                )
             else:
-                episode_ids.append(episode_id)
-                valid_episode_ids.add(episode_id)
+                episode_ids.append(episode.id)
+                valid_episode_ids.add(episode.id)
 
     # Log total episode count
-    print(f"Show {show_id} has {episode_count} episodes, {len(episode_ids)} valid in MEDIA dictionary")
+    print(
+        f"Show {show_id} has {episode_count} episodes, {len(episode_ids)} valid in MEDIA dictionary"
+    )
 
     return render_template(
         "ui/show_detail.html",

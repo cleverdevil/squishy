@@ -231,17 +231,31 @@ def scan_status():
 @api_bp.route("/media/<media_id>/technical_info", methods=["GET"])
 def get_media_technical_info(media_id):
     """Get detailed technical information about a specific media item."""
+    # Improved debug logging
+    print(f"DEBUG: Received technical info request for media ID: {media_id}")
+    
     media_item = get_media(media_id)
     if media_item is None:
+        print(f"DEBUG: Media item not found for ID: {media_id}")
         return jsonify({"error": "Media not found"}), 404
     
     try:
-        # Log that we're processing this request
-        print(f"Processing technical info request for media ID: {media_id}")
+        print(f"DEBUG: Processing technical info for path: {media_item.path}")
+        
+        # Check if the file exists
+        import os
+        if not os.path.exists(media_item.path):
+            print(f"DEBUG: File does not exist: {media_item.path}")
+            return jsonify({"error": f"Media file not found at {media_item.path}"}), 404
         
         # Get technical information about the media file
         media_info = get_media_info(media_item.path)
         
+        # Check if there was an error in get_media_info
+        if "error" in media_info:
+            print(f"DEBUG: Error in get_media_info: {media_info['error']}")
+            return jsonify(media_info), 500
+            
         # Format file size for display
         file_size = format_file_size(media_info.get("format", {}).get("size", 0))
         
@@ -276,15 +290,17 @@ def get_media_technical_info(media_id):
         media_info["basic_info"] = basic_info
         
         # Log successful processing
-        print(f"Successfully processed technical info for media ID: {media_id}")
+        print(f"DEBUG: Successfully processed technical info for media ID: {media_id}")
         
         return jsonify(media_info)
     except Exception as e:
-        # Log the error
+        # Enhanced error logging
         import traceback
-        print(f"Error processing technical info for media ID: {media_id}")
-        print(f"Error: {str(e)}")
-        print(traceback.format_exc())
+        import sys
+        print(f"DEBUG: Error processing technical info for media ID: {media_id}")
+        print(f"DEBUG: Error type: {type(e).__name__}")
+        print(f"DEBUG: Error message: {str(e)}")
+        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         
         return jsonify({"error": f"Error getting technical info: {str(e)}"}), 500
 

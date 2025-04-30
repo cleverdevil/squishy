@@ -2,6 +2,14 @@
 
 {% block title %}{{ show.display_name }} - Squishy{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/show_detail.css') }}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/show_detail.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="show-detail">
     <div class="back-button-container">
@@ -37,121 +45,76 @@
                 {% endif %}
             </p>
 
-            {% if show.genres or show.creators or show.actors or show.first_air_date or show.rating or show.content_rating or show.studio %}
-            <div class="media-metadata">
-                {% if show.genres %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Genres:</span>
-                    <span class="metadata-value">{{ show.genres|join(', ') }}</span>
-                </div>
-                {% endif %}
-
-                {% if show.creators %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Creator{% if show.creators|length > 1 %}s{% endif %}:</span>
-                    <span class="metadata-value">{{ show.creators|join(', ') }}</span>
-                </div>
-                {% endif %}
-
-                {% if show.actors %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Cast:</span>
-                    <span class="metadata-value">{{ show.actors|join(', ') }}</span>
-                </div>
-                {% endif %}
-
+            <div class="show-details">
                 {% if show.first_air_date %}
-                <div class="metadata-item">
-                    <span class="metadata-label">First Aired:</span>
-                    <span class="metadata-value">{{ show.first_air_date[:10] }}</span>
-                </div>
-                {% endif %}
-
-                {% if show.rating %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Rating:</span>
-                    <span class="metadata-value">{{ '%0.1f'|format(show.rating) }}/10</span>
+                <div class="detail-item">
+                    <div class="detail-label">First Aired:</div>
+                    <div class="detail-value">{{ show.first_air_date[:10] }}</div>
                 </div>
                 {% endif %}
 
                 {% if show.content_rating %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Content Rating:</span>
-                    <span class="metadata-value">{{ show.content_rating }}</span>
+                <div class="detail-item">
+                    <div class="detail-label">Content Rating:</div>
+                    <div class="detail-value">{{ show.content_rating }}</div>
                 </div>
                 {% endif %}
 
-                {% if show.studio %}
-                <div class="metadata-item">
-                    <span class="metadata-label">Studio:</span>
-                    <span class="metadata-value">{{ show.studio }}</span>
+                {% if show.rating %}
+                <div class="detail-item">
+                    <div class="detail-label">Rating:</div>
+                    <div class="detail-value">{{ '%0.1f'|format(show.rating) }}/10</div>
                 </div>
                 {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 
     <div class="seasons-container">
         {% for season in show.sorted_seasons %}
-        <div class="season-block" id="season-{{ season.number }}">
-            <h2 class="season-title">{{ season.display_name }}</h2>
-
-            <div class="episodes-list">
+        <div class="admin-section">
+            <h2>{{ season.display_name }}</h2>
+            
+            <div class="episodes-table">
                 {% for episode in season.sorted_episodes %}
-                <div class="episode-item card">
-                    <div class="episode-header">
-                        {% if episode.id in valid_episode_ids %}
-                        <button class="tech-info-btn icon-button" title="Show Technical Info" data-episode-id="{{ episode.id }}" data-path="{{ episode.path }}">
-                            <img src="{{ url_for('static', filename='img/log.svg') }}" alt="Technical Info" width="18" height="18">
-                        </button>
-                        {% else %}
-                        <button class="icon-button" disabled title="Technical info not available for this episode">
-                            <img src="{{ url_for('static', filename='img/log.svg') }}" alt="No Technical Info" width="18" height="18" style="opacity: 0.5;">
-                        </button>
-                        {% endif %}
-                        <h3 class="episode-title">{{ episode.display_name }}</h3>
+                <div class="episode-row">
+                    <div class="episode-artwork">
+                        <div class="placeholder-thumbnail">
+                            <span>{{ episode.episode_number if episode.episode_number else '?' }}</span>
+                        </div>
                     </div>
-
-                    <div class="episode-info">
+                    
+                    <div class="episode-content">
+                        <h3 class="episode-title">{{ episode.display_name }}</h3>
+                        
                         {% if episode.overview %}
-                        <p class="episode-overview">{{ episode.overview }}</p>
+                        <p class="episode-description">{{ episode.overview }}</p>
                         {% endif %}
-
+                        
                         {% if episode.air_date %}
                         <p class="episode-air-date">Aired: {{ episode.air_date[:10] }}</p>
                         {% endif %}
                     </div>
-
+                    
                     <div class="episode-actions">
-                        <form action="{{ url_for('ui.transcode', media_id=episode.id) }}" method="post" class="transcode-form">
-                            <div class="action-group">
-                                <select id="profile-{{ episode.id }}" name="profile" required>
-                                    {% for name, profile in profiles.items() %}
-                                    <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
-                                    {% endfor %}
-                                </select>
-                                <button type="submit" class="squish-btn">Squish</button>
-                            </div>
-                        </form>
+                        <button type="button" class="tech-info-btn" 
+                                {% if episode.id in valid_episode_ids %}
+                                data-episode-id="{{ episode.id }}" 
+                                data-path="{{ episode.path }}"
+                                {% else %}
+                                disabled
+                                title="Technical info not available for this episode"
+                                {% endif %}>
+                            Technical Info
+                        </button>
+                        
+                        <button type="button" class="squish-btn" 
+                                data-episode-id="{{ episode.id }}" 
+                                data-episode-title="{{ episode.display_name }}">
+                            Squish
+                        </button>
                     </div>
                 </div>
-
-                <!-- Technical info container (outside the card, will be used for modal) -->
-                {% if episode.id in valid_episode_ids %}
-                <div id="tech-info-container-{{ episode.id }}" class="tech-info-container modal-container" style="display: none;">
-                    <div class="modal-content">
-                        <button class="close-modal-btn" data-episode-id="{{ episode.id }}">&times;</button>
-                        <div class="modal-body">
-                            <div class="loading-indicator">
-                                <div class="spinner"></div>
-                                <p>Loading technical information...</p>
-                            </div>
-                            <div class="tech-info-content"></div>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
                 {% endfor %}
             </div>
         </div>
@@ -159,578 +122,44 @@
     </div>
 </div>
 
-<style>
-.episode-item {
-    margin-bottom: 1rem;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.episode-header {
-    display: flex;
-    align-items: center;
-    padding: 1rem 1rem 0.5rem;
-}
-
-.episode-info {
-    flex: 1;
-    padding: 0 1rem 0.5rem;
-}
-
-.episode-title {
-    margin: 0 0 0 0.5rem;
-    color: var(--primary-color);
-}
-
-.episode-overview {
-    margin: 0.5rem 0;
-    color: #555;
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-
-.episode-air-date {
-    margin: 0.5rem 0 0;
-    color: #777;
-    font-size: 0.8rem;
-    font-style: italic;
-}
-
-.episode-actions {
-    background-color: #f5f5f5;
-    padding: 0.8rem 1rem;
-    border-top: 1px solid #e0e0e0;
-    border-radius: 0 0 5px 5px;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-}
-
-.action-group {
-    display: flex;
-    align-items: center;
-}
-
-.action-group select {
-    margin-right: 0.5rem;
-    padding: 0.35rem;
-    border-radius: 3px;
-    border: 1px solid #ccc;
-}
-
-.squish-btn {
-    padding: 0.35rem 0.75rem;
-}
-
-/* Icon button styles */
-.icon-button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s;
-}
-
-.icon-button:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-.icon-button:active {
-    background-color: rgba(0, 0, 0, 0.1);
-}
-
-.icon-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.season-title {
-    margin-bottom: 1rem;
-}
-
-/* New styles for the show header */
-.show-header {
-    align-items: flex-start;
-}
-
-.show-info h1 {
-    margin-top: 0;
-    margin-bottom: 0.5rem;
-}
-
-.media-meta {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
-}
-
-.media-type-pill,
-.seasons-pill,
-.episodes-pill {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-
-.tv-type {
-    background-color: #9b59b625;
-    color: #9b59b6;
-}
-
-.seasons-pill {
-    background-color: #3498db25;
-    color: #3498db;
-}
-
-.episodes-pill {
-    background-color: #27ae6025;
-    color: #27ae60;
-}
-
-.media-description {
-    margin-bottom: 1rem;
-    color: #555;
-    line-height: 1.5;
-}
-
-.media-metadata {
-    margin-bottom: 1.5rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 0.5rem 1rem;
-}
-
-.metadata-item {
-    display: flex;
-    align-items: baseline;
-}
-
-.metadata-label {
-    font-weight: 500;
-    color: var(--dark-color);
-    margin-right: 0.5rem;
-    white-space: nowrap;
-}
-
-.metadata-value {
-    color: #555;
-}
-
-/* Modal styles */
-.modal-open {
-    overflow: hidden;
-}
-
-.modal-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal-content {
-    background-color: white;
-    border-radius: 5px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    width: 90%;
-    max-width: 700px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    overflow: hidden;
-}
-
-.close-modal-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: none;
-    border: none;
-    font-size: 1.8rem;
-    cursor: pointer;
-    color: #777;
-    padding: 0;
-    z-index: 2;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: all 0.2s;
-}
-
-.close-modal-btn:hover {
-    color: #555;
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-.modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    max-height: 80vh;
-}
-
-/* Technical information styles */
-.tech-info-content {
-    font-size: 0.9rem;
-}
-
-.tech-info-section {
-    margin-bottom: 1.5rem;
-}
-
-.tech-info-section:last-child {
-    margin-bottom: 0;
-}
-
-.tech-info-section h4 {
-    margin-top: 0;
-    margin-bottom: 0.8rem;
-    color: var(--primary-color);
-    font-size: 1.1rem;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 0.3rem;
-}
-
-.tech-info-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.tech-info-table th,
-.tech-info-table td {
-    padding: 0.5rem;
-    text-align: left;
-    border-bottom: 1px solid #eee;
-}
-
-.tech-info-table tr:last-child th,
-.tech-info-table tr:last-child td {
-    border-bottom: none;
-}
-
-.tech-info-table th {
-    width: 30%;
-    font-weight: bold;
-    color: var(--dark-color);
-}
-
-.loading-indicator {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(0, 0, 0, 0.1);
-    border-radius: 50%;
-    border-top-color: var(--secondary-color);
-    animation: spin 1s linear infinite;
-    margin-bottom: 0.8rem;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-</style>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Show detail page loaded');
-
-    // Add click handlers to technical info buttons
-    const techButtons = document.querySelectorAll('.tech-info-btn');
-    techButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const episodeId = this.getAttribute('data-episode-id');
-            const container = document.getElementById(`tech-info-container-${episodeId}`);
-
-            // Show the modal
-            container.style.display = 'flex';
-
-            // Add body class to prevent scrolling
-            document.body.classList.add('modal-open');
-
-            // Find content div
-            const contentDiv = container.querySelector('.tech-info-content');
-            const loadingDiv = container.querySelector('.loading-indicator');
-
-            // If content is already loaded, just show it
-            if (contentDiv.innerHTML.trim() !== '') {
-                contentDiv.style.display = 'block';
-                loadingDiv.style.display = 'none';
-                return;
-            }
-
-            // Show loading indicator and fetch the data
-            contentDiv.style.display = 'none';
-            loadingDiv.style.display = 'flex';
-            fetchTechnicalInfo(episodeId, this, container);
-        });
-    });
-
-    // Add click handlers to close buttons
-    const closeButtons = document.querySelectorAll('.close-modal-btn');
-    closeButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const episodeId = this.getAttribute('data-episode-id');
-            const container = document.getElementById(`tech-info-container-${episodeId}`);
-
-            // Hide the modal
-            container.style.display = 'none';
-
-            // Remove body class to allow scrolling
-            document.body.classList.remove('modal-open');
-        });
-    });
-
-    // Close modal when clicking outside the content
-    document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('modal-container')) {
-            // Hide the modal
-            event.target.style.display = 'none';
-
-            // Remove body class to allow scrolling
-            document.body.classList.remove('modal-open');
-        }
-    });
-
-    // Function to fetch technical info from the API
-    function fetchTechnicalInfo(episodeId, button, container) {
-        console.log('Fetching technical info for episode:', episodeId);
-
-        // Find content and loading divs
-        const contentDiv = container.querySelector('.tech-info-content');
-        const loadingDiv = container.querySelector('.loading-indicator');
-
-        // Simple fetch to the API endpoint
-        fetch(`/api/media/${episodeId}/technical_info`)
-            .then(response => {
-                console.log('Response status:', response.status);
-                if (!response.ok) {
-                    throw new Error(`API error: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Received data:', data);
-
-                // Generate HTML content
-                contentDiv.innerHTML = generateTechnicalInfoHTML(data, episodeId, button);
-
-                // Hide loading, show content
-                loadingDiv.style.display = 'none';
-                contentDiv.style.display = 'block';
-            })
-            .catch(error => {
-                console.error('Error fetching technical info:', error);
-
-                // Show error in content div
-                contentDiv.innerHTML = `
-                    <div class="error-message" style="color: #d32f2f; padding: 1rem; background-color: #ffebee; border-radius: 5px;">
-                        <p>Error loading technical information: ${error.message}</p>
-                    </div>
-                `;
-
-                // Hide loading, show error content
-                loadingDiv.style.display = 'none';
-                contentDiv.style.display = 'block';
-            });
-    }
-
-    // Function to generate HTML for technical info
-    function generateTechnicalInfoHTML(data, episodeId, button) {
-        let html = '';
-
-        // File info section
-        html += `
-            <div class="tech-info-section">
-                <h4>File Information</h4>
-                <table class="tech-info-table">
-                    <tbody>
-                        <tr>
-                            <th>Path</th>
-                            <td>${data.format?.filename || 'Unknown'}</td>
-                        </tr>
-                        <tr>
-                            <th>Size</th>
-                            <td>${data.formatted_file_size || 'Unknown'}</td>
-                        </tr>
-                        <tr>
-                            <th>Format</th>
-                            <td>${data.format?.format_name || 'Unknown'}</td>
-                        </tr>
-                        <tr>
-                            <th>Duration</th>
-                            <td>${((data.format?.duration || 0) / 60).toFixed(2)} minutes</td>
-                        </tr>
-                        <tr>
-                            <th>Bitrate</th>
-                            <td>${((data.format?.bit_rate || 0) / 1000000).toFixed(2)} Mbps</td>
-                        </tr>
-                    </tbody>
-                </table>
+<!-- Technical Info Modal -->
+<div class="modal" id="techInfoModal">
+    <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <div class="modal-body">
+            <div class="loading-container">
+                <div class="loading-spinner"></div>
+                <p>Loading technical information...</p>
             </div>
-        `;
+            <div id="techInfoContent"></div>
+        </div>
+    </div>
+</div>
 
-        // Video section
-        if (data.video && data.video.length > 0) {
-            html += `
-                <div class="tech-info-section">
-                    <h4>Video</h4>
-                    <table class="tech-info-table">
-                        <tbody>
-            `;
-
-            data.video.forEach(video => {
-                html += `
-                    <tr>
-                        <th>Codec</th>
-                        <td>${video.codec} (${video.codec_description})</td>
-                    </tr>
-                    <tr>
-                        <th>Resolution</th>
-                        <td>${video.width}x${video.height}</td>
-                    </tr>
-                    <tr>
-                        <th>Frame Rate</th>
-                        <td>${video.frame_rate} fps</td>
-                    </tr>
-                    <tr>
-                        <th>Bit Depth</th>
-                        <td>${video.bit_depth} bit</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                        </tbody>
-                    </table>
+<!-- Squish Modal -->
+<div class="modal" id="squishModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Squish Episode</h3>
+            <span class="close-modal">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Select a transcoding profile for this episode:</p>
+            
+            <form id="squishForm" action="{{ url_for('ui.transcode', media_id='placeholder') }}" method="post">
+                <div class="form-group">
+                    <select id="squishProfile" name="profile" required>
+                        {% for name, profile in profiles.items() %}
+                        <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
+                        {% endfor %}
+                    </select>
                 </div>
-            `;
-        }
-
-        // HDR section
-        if (data.hdr_info) {
-            html += `
-                <div class="tech-info-section">
-                    <h4>HDR Information</h4>
-                    <table class="tech-info-table">
-                        <tbody>
-                            <tr>
-                                <th>HDR Type</th>
-                                <td>${data.hdr_info.type || 'Unknown'}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                
+                <div class="form-submit">
+                    <button type="submit" class="squish-submit-btn">Squish</button>
                 </div>
-            `;
-        }
-
-        // Audio section
-        if (data.audio && data.audio.length > 0) {
-            html += `
-                <div class="tech-info-section">
-                    <h4>Audio</h4>
-                    <table class="tech-info-table">
-                        <tbody>
-            `;
-
-            data.audio.forEach(audio => {
-                html += `
-                    <tr>
-                        <th>Codec</th>
-                        <td>${audio.codec}</td>
-                    </tr>
-                    <tr>
-                        <th>Channels</th>
-                        <td>${audio.channels} (${audio.channel_layout})</td>
-                    </tr>
-                `;
-
-                if (audio.language) {
-                    html += `
-                        <tr>
-                            <th>Language</th>
-                            <td>${audio.language}</td>
-                        </tr>
-                    `;
-                }
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-
-        // Subtitle section
-        if (data.subtitle && data.subtitle.length > 0) {
-            html += `
-                <div class="tech-info-section">
-                    <h4>Subtitles</h4>
-                    <table class="tech-info-table">
-                        <tbody>
-            `;
-
-            data.subtitle.forEach(subtitle => {
-                html += `
-                    <tr>
-                        <th>Codec</th>
-                        <td>${subtitle.codec}</td>
-                    </tr>
-                `;
-
-                if (subtitle.language) {
-                    html += `
-                        <tr>
-                            <th>Language</th>
-                            <td>${subtitle.language}</td>
-                        </tr>
-                    `;
-                }
-
-                if (subtitle.title) {
-                    html += `
-                        <tr>
-                            <th>Title</th>
-                            <td>${subtitle.title}</td>
-                        </tr>
-                    `;
-                }
-            });
-
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        }
-
-        return html;
-    }
-});
-</script>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
