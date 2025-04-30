@@ -24,16 +24,17 @@
     </header>
     
     <div class="container">
-        {% for message in get_flashed_messages() %}
-        <div class="flash">{{ message }}</div>
-        {% endfor %}
+        <!-- We don't render flashed messages here anymore, they'll be shown via JavaScript notifications -->
         
         {% block content %}{% endblock %}
     </div>
     
-    <div id="scan-notification" class="scan-notification" style="display: none;">
-        <div class="scan-notification-content">
-            <span id="scan-notification-text">Scanning in progress...</span>
+    <div id="notification-container">
+        <!-- Notifications will be added here dynamically -->
+        <div id="scan-notification" class="notification scan-notification" style="display: none;">
+            <div class="notification-content">
+                <span id="scan-notification-text">Scanning in progress...</span>
+            </div>
         </div>
     </div>
     
@@ -43,12 +44,104 @@
     
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
+        // Notification system
+        const notificationSystem = {
+            container: null,
+            notificationCount: 0,
+            
+            init: function() {
+                this.container = document.getElementById('notification-container');
+                
+                // Process flashed messages if any
+                this.processFlashedMessages();
+            },
+            
+            processFlashedMessages: function() {
+                // Get all flashed messages from the server-side (if any)
+                const flashedMessages = {{ get_flashed_messages(with_categories=true)|tojson }};
+                
+                if (flashedMessages && flashedMessages.length > 0) {
+                    flashedMessages.forEach(flash => {
+                        const category = flash[0] || 'info';
+                        const message = flash[1];
+                        this.show(message, category);
+                    });
+                }
+            },
+            
+            show: function(message, type = 'info', timeout = 5000) {
+                const id = `notification-${this.notificationCount++}`;
+                const notification = document.createElement('div');
+                notification.id = id;
+                notification.className = `notification ${type}`;
+                notification.style.display = 'block';
+                
+                notification.innerHTML = `
+                    <div class="notification-content">
+                        <span>${message}</span>
+                    </div>
+                `;
+                
+                this.container.appendChild(notification);
+                
+                // Auto-hide after timeout
+                if (timeout > 0) {
+                    setTimeout(() => {
+                        this.hide(id);
+                    }, timeout);
+                }
+                
+                return id;
+            },
+            
+            hide: function(id) {
+                const notification = document.getElementById(id);
+                if (notification) {
+                    notification.style.animation = 'fade-out 0.5s forwards';
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 500);
+                }
+            },
+            
+            // Special method for scan notifications which have different behavior
+            updateScanNotification: function(data) {
+                const scanNotificationEl = document.getElementById('scan-notification');
+                const textEl = document.getElementById('scan-notification-text');
+                
+                if (data.in_progress) {
+                    // Format message based on the source
+                    let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                    let message = `${source} scan in progress...`;
+                    
+                    // Show notification
+                    textEl.textContent = message;
+                    scanNotificationEl.style.display = 'block';
+                } else {
+                    // If completed recently, show completed message
+                    if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
+                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
+                        textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
+                        scanNotificationEl.style.display = 'block';
+                        
+                        // Hide after 3 seconds
+                        setTimeout(() => {
+                            scanNotificationEl.style.display = 'none';
+                        }, 3000);
+                    } else {
+                        // No active scan and not recently completed
+                        scanNotificationEl.style.display = 'none';
+                    }
+                }
+            }
+        };
+        
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize notification system
+            notificationSystem.init();
+            
             // Connect to SocketIO server
             const socket = io();
-            
-            const notificationEl = document.getElementById('scan-notification');
-            const textEl = document.getElementById('scan-notification-text');
             
             // Listen for connection events
             socket.on('connect', function() {
@@ -61,30 +154,7 @@
             
             // Handle scan status updates
             socket.on('scan_status', function(data) {
-                if (data.in_progress) {
-                    // Format message based on the source
-                    let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                    let message = `${source} scan in progress...`;
-                    
-                    // Show notification
-                    textEl.textContent = message;
-                    notificationEl.style.display = 'block';
-                } else {
-                    // If completed recently, show completed message
-                    if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
-                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                        textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
-                        notificationEl.style.display = 'block';
-                        
-                        // Hide after 3 seconds
-                        setTimeout(() => {
-                            notificationEl.style.display = 'none';
-                        }, 3000);
-                    } else {
-                        // No active scan and not recently completed
-                        notificationEl.style.display = 'none';
-                    }
-                }
+                notificationSystem.updateScanNotification(data);
             });
             
             // Handle job updates
@@ -93,29 +163,30 @@
                 // We'll dispatch a custom event so other pages can listen
                 const event = new CustomEvent('squishy:job_update', { detail: data });
                 document.dispatchEvent(event);
+                
+                // Show a notification for completed or failed jobs
+                if (data.status === 'completed') {
+                    notificationSystem.show(`Job completed: ${data.title || 'Media transcoded successfully'}`, 'success');
+                } else if (data.status === 'failed') {
+                    notificationSystem.show(`Job failed: ${data.error_message || 'Transcoding failed'}`, 'error');
+                }
             });
             
             // Get initial scan status
             fetch('/api/scan/status')
                 .then(response => response.json())
                 .then(data => {
-                    // Process initial scan status using the same logic
-                    if (data.in_progress) {
-                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                        let message = `${source} scan in progress...`;
-                        textEl.textContent = message;
-                        notificationEl.style.display = 'block';
-                    } else if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
-                        let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                        textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
-                        notificationEl.style.display = 'block';
-                        setTimeout(() => { notificationEl.style.display = 'none'; }, 3000);
-                    }
+                    notificationSystem.updateScanNotification(data);
                 })
                 .catch(error => {
                     console.error('Error fetching initial scan status:', error);
                 });
         });
+        
+        // Global function to show notifications from anywhere in the app
+        function showNotification(message, type = 'info', timeout = 5000) {
+            return notificationSystem.show(message, type, timeout);
+        }
     </script>
     
     {% block scripts %}{% endblock %}

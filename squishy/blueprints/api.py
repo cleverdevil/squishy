@@ -6,6 +6,7 @@ from squishy.config import load_config
 from squishy.models import TranscodeJob
 from squishy.scanner import get_all_media, get_media, get_scan_status
 from squishy.transcoder import create_job, get_job, start_transcode
+from squishy.media_info import get_media_info, format_file_size
 
 api_bp = Blueprint("api", __name__)
 
@@ -226,3 +227,51 @@ def scan_status():
     status = get_scan_status()
     
     return jsonify(status)
+
+@api_bp.route("/media/<media_id>/technical_info", methods=["GET"])
+def get_media_technical_info(media_id):
+    """Get detailed technical information about a specific media item."""
+    media_item = get_media(media_id)
+    if media_item is None:
+        return jsonify({"error": "Media not found"}), 404
+    
+    try:
+        # Get technical information about the media file
+        media_info = get_media_info(media_item.path)
+        
+        # Format file size for display
+        file_size = format_file_size(media_info.get("format", {}).get("size", 0))
+        
+        # Add the formatted file size to the response
+        media_info["formatted_file_size"] = file_size
+        
+        # Add minimal info for resolution and HDR badges
+        basic_info = {
+            "has_resolution_badge": False,
+            "resolution_badge": "",
+            "has_hdr": False,
+            "hdr_type": ""
+        }
+        
+        # Check for resolution badges
+        if media_info.get("video") and len(media_info["video"]) > 0:
+            video = media_info["video"][0]
+            width = video.get("width", 0)
+            
+            if width >= 3840:
+                basic_info["has_resolution_badge"] = True
+                basic_info["resolution_badge"] = "4K"
+            elif width >= 1920:
+                basic_info["has_resolution_badge"] = True
+                basic_info["resolution_badge"] = "HD"
+        
+        # Check for HDR
+        if media_info.get("hdr_info"):
+            basic_info["has_hdr"] = True
+            basic_info["hdr_type"] = media_info["hdr_info"].get("type", "")
+        
+        media_info["basic_info"] = basic_info
+        
+        return jsonify(media_info)
+    except Exception as e:
+        return jsonify({"error": f"Error getting technical info: {str(e)}"}), 500

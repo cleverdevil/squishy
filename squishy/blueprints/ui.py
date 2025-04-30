@@ -45,18 +45,10 @@ def media_detail(media_id):
     if media_item.type == "episode" and media_item.show_id:
         return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
 
-    # Get technical information about the media file
-    media_info = get_media_info(media_item.path)
-
-    # Format file size for display
-    file_size = format_file_size(media_info.get("format", {}).get("size", 0))
-
     return render_template(
         "ui/media_detail.html",
         media=media_item,
         profiles=config.profiles,
-        media_info=media_info,
-        file_size=file_size,
     )
 
 
