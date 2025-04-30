@@ -2,8 +2,14 @@
 
 import os
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, current_app,
-    flash, send_file
+    Blueprint,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    current_app,
+    flash,
+    send_file,
 )
 
 from squishy.config import load_config
@@ -14,17 +20,16 @@ from squishy.media_info import get_media_info, format_file_size
 
 ui_bp = Blueprint("ui", __name__)
 
+
 @ui_bp.route("/")
 def index():
     """Display the home page with client-side pagination and search."""
     # Get search query for initial state
-    search_query = request.args.get('q', '').strip().lower()
-    
+    search_query = request.args.get("q", "").strip().lower()
+
     # We will load the media via AJAX, so just pass minimal parameters to the template
-    return render_template(
-        "ui/index.html",
-        search_query=search_query
-    )
+    return render_template("ui/index.html", search_query=search_query)
+
 
 @ui_bp.route("/media/<media_id>")
 def media_detail(media_id):
@@ -33,19 +38,19 @@ def media_detail(media_id):
     if media_item is None:
         flash("Media not found")
         return redirect(url_for("ui.index"))
-    
+
     config = load_config()
-    
+
     # If this is an episode, redirect to the show detail page
     if media_item.type == "episode" and media_item.show_id:
         return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
-    
+
     # Get technical information about the media file
     media_info = get_media_info(media_item.path)
-    
+
     # Format file size for display
     file_size = format_file_size(media_info.get("format", {}).get("size", 0))
-    
+
     return render_template(
         "ui/media_detail.html",
         media=media_item,
@@ -54,6 +59,7 @@ def media_detail(media_id):
         file_size=file_size,
     )
 
+
 @ui_bp.route("/shows/<show_id>")
 def show_detail(show_id):
     """Display details for a TV show."""
@@ -61,16 +67,16 @@ def show_detail(show_id):
     if show is None:
         flash("Show not found")
         return redirect(url_for("ui.index"))
-    
+
     config = load_config()
-    
+
     # Get technical information for each episode
     episodes_info = {}
     for season in show.seasons.values():
         for episode in season.episodes.values():
             # Get technical information about the episode file
             media_info = get_media_info(episode.path)
-            
+
             # Check if media_info contains an error
             if "error" in media_info:
                 episodes_info[episode.id] = {
@@ -79,40 +85,44 @@ def show_detail(show_id):
                             "format_name": "Unknown",
                             "duration": 0,
                             "bit_rate": 0,
-                            "size": 0
+                            "size": 0,
                         },
                         "video": [],
                         "audio": [],
                         "subtitle": [],
-                        "error": media_info["error"]
+                        "error": media_info["error"],
                     },
                     "file_size": "Unknown",
-                    "has_error": True
+                    "has_error": True,
                 }
             else:
                 episodes_info[episode.id] = {
                     "media_info": media_info,
-                    "file_size": format_file_size(media_info.get("format", {}).get("size", 0)),
-                    "has_error": False
+                    "file_size": format_file_size(
+                        media_info.get("format", {}).get("size", 0)
+                    ),
+                    "has_error": False,
                 }
-    
+
     return render_template(
         "ui/show_detail.html",
         show=show,
         profiles=config.profiles,
         episodes_info=episodes_info,
+        episode_count=len(episodes_info.keys()),
     )
+
 
 @ui_bp.route("/transcode/<media_id>", methods=["POST"])
 def transcode(media_id):
     """Start a transcoding job."""
     profile_name = request.form["profile"]
-    
+
     media_item = get_media(media_id)
     if media_item is None:
         flash("Media not found")
         return redirect(url_for("ui.index"))
-    
+
     config = load_config()
     if profile_name not in config.profiles:
         flash("Invalid profile")
@@ -120,7 +130,7 @@ def transcode(media_id):
             return redirect(url_for("ui.media_detail", media_id=media_id))
         else:  # episode
             return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
-    
+
     job = create_job(media_item, profile_name)
     start_transcode(
         job,
@@ -128,25 +138,26 @@ def transcode(media_id):
         config.profiles[profile_name],
         current_app.config["TRANSCODE_PATH"],
     )
-    
+
     flash(f"Transcoding job started with profile: {profile_name}")
-    
+
     # Return to the appropriate page
     if media_item.type == "movie":
         return redirect(url_for("ui.media_detail", media_id=media_id))
     else:  # episode
         return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
 
+
 @ui_bp.route("/jobs")
 def jobs():
     """Display transcoding jobs grouped by status."""
     from squishy.transcoder import JOBS
-    
+
     # Get media items for each job to display title instead of ID
     active_jobs = []
     completed_jobs = []
     failed_jobs = []
-    
+
     # Helper function to format file size
     def format_file_size(bytes_size):
         if bytes_size < 1024 * 1024:  # Less than 1 MB
@@ -155,7 +166,7 @@ def jobs():
             return f"{round(bytes_size / (1024 * 1024), 2)} MB"
         else:  # GB or larger
             return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
-    
+
     for job in JOBS.values():
         media_item = get_media(job.media_id)
         if media_item:
@@ -163,17 +174,23 @@ def jobs():
             try:
                 file_size_bytes = os.path.getsize(media_item.path)
                 file_size = format_file_size(file_size_bytes)
-                
+
                 # If job is completed and has output path, show both sizes and compression percentage
-                if job.status == "completed" and job.output_path and os.path.exists(job.output_path):
+                if (
+                    job.status == "completed"
+                    and job.output_path
+                    and os.path.exists(job.output_path)
+                ):
                     output_size_bytes = os.path.getsize(job.output_path)
                     output_size = format_file_size(output_size_bytes)
-                    
+
                     # Calculate compression percentage
                     if file_size_bytes > 0:
-                        compression_pct = 100 - (output_size_bytes / file_size_bytes * 100)
+                        compression_pct = 100 - (
+                            output_size_bytes / file_size_bytes * 100
+                        )
                         file_size = f"{file_size} → {output_size} ({compression_pct:.1f}% smaller)"
-                
+
                 # For TV shows, include show title
                 if media_item.type == "episode" and media_item.show_id:
                     show = get_show(media_item.show_id)
@@ -183,13 +200,13 @@ def jobs():
                         media_title = media_item.display_name
                 else:
                     media_title = media_item.display_name
-                
+
                 job_data = {
                     "job": job,
                     "media_title": media_title,
-                    "file_size": file_size
+                    "file_size": file_size,
                 }
-                
+
                 # Categorize job by status
                 if job.status in ["processing", "pending"]:
                     active_jobs.append(job_data)
@@ -197,15 +214,15 @@ def jobs():
                     completed_jobs.append(job_data)
                 else:  # failed or cancelled
                     failed_jobs.append(job_data)
-                    
+
             except (FileNotFoundError, OSError):
                 # Handle case where file doesn't exist or can't be accessed
                 job_data = {
                     "job": job,
                     "media_title": media_item.display_name if media_item else "Unknown",
-                    "file_size": "N/A"
+                    "file_size": "N/A",
                 }
-                
+
                 # Categorize job by status
                 if job.status in ["processing", "pending"]:
                     active_jobs.append(job_data)
@@ -214,12 +231,8 @@ def jobs():
                 else:  # failed or cancelled
                     failed_jobs.append(job_data)
         else:
-            job_data = {
-                "job": job,
-                "media_title": "Unknown",
-                "file_size": "N/A"
-            }
-            
+            job_data = {"job": job, "media_title": "Unknown", "file_size": "N/A"}
+
             # Categorize job by status
             if job.status in ["processing", "pending"]:
                 active_jobs.append(job_data)
@@ -227,46 +240,53 @@ def jobs():
                 completed_jobs.append(job_data)
             else:  # failed or cancelled
                 failed_jobs.append(job_data)
-    
+
     # Sort active jobs to put processing ones first, then pending ones
     active_jobs.sort(key=lambda x: 0 if x["job"].status == "processing" else 1)
-    
+
     return render_template(
-        "ui/jobs.html", 
+        "ui/jobs.html",
         active_jobs=active_jobs,
         completed_jobs=completed_jobs,
-        failed_jobs=failed_jobs
+        failed_jobs=failed_jobs,
     )
+
+
 @ui_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
     """Cancel a transcoding job."""
     from squishy.transcoder import cancel_job as cancel_transcode_job
-    
+
     success = cancel_transcode_job(job_id)
     if success:
         flash("Job cancelled successfully")
     else:
         flash("Could not cancel job", "error")
-    
+
     return redirect(url_for("ui.jobs"))
+
 
 @ui_bp.route("/jobs/<job_id>/remove", methods=["POST"])
 def remove_job(job_id):
     """Remove a completed, failed, or cancelled job."""
     from squishy.transcoder import remove_job as remove_transcode_job
-    
+
     success = remove_transcode_job(job_id)
     if success:
         flash("Job removed successfully")
     else:
         flash("Could not remove job", "error")
-    
+
     return redirect(url_for("ui.jobs"))
+
+
 @ui_bp.route("/completed")
 def completed():
     """Display completed transcodes."""
-    completed_transcodes = get_completed_transcodes(current_app.config["TRANSCODE_PATH"])
-    
+    completed_transcodes = get_completed_transcodes(
+        current_app.config["TRANSCODE_PATH"]
+    )
+
     # Helper function to format file size
     def format_file_size(bytes_size):
         if bytes_size < 1024 * 1024:  # Less than 1 MB
@@ -275,61 +295,65 @@ def completed():
             return f"{round(bytes_size / (1024 * 1024), 2)} MB"
         else:  # GB or larger
             return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
-    
+
     # Add original file size and compression details
     for transcode in completed_transcodes:
         if "original_path" in transcode and os.path.exists(transcode["original_path"]):
             # Get original file size
             original_size_bytes = os.path.getsize(transcode["original_path"])
             original_size = format_file_size(original_size_bytes)
-            
+
             # Get transcoded file size
             output_size_bytes = os.path.getsize(transcode["file_path"])
             output_size = format_file_size(output_size_bytes)
-            
+
             # Calculate compression percentage
             if original_size_bytes > 0:
                 compression_pct = 100 - (output_size_bytes / original_size_bytes * 100)
-                transcode["size_comparison"] = f"{original_size} → {output_size} ({compression_pct:.1f}% smaller)"
+                transcode["size_comparison"] = (
+                    f"{original_size} → {output_size} ({compression_pct:.1f}% smaller)"
+                )
             else:
                 transcode["size_comparison"] = output_size
         else:
             transcode["size_comparison"] = transcode.get("output_size", "Unknown")
-    
+
     return render_template("ui/completed.html", transcodes=completed_transcodes)
+
 
 @ui_bp.route("/download/<filename>")
 def download_file(filename):
     """Serve a file for download."""
     transcode_path = current_app.config["TRANSCODE_PATH"]
     file_path = os.path.join(transcode_path, filename)
-    
+
     # Verify the file exists and is within transcode_path
     if not os.path.exists(file_path) or not os.path.isfile(file_path):
         flash("File not found")
         return redirect(url_for("ui.completed"))
-    
+
     # Security check - make sure the file is in the transcode directory
     real_transcode_path = os.path.realpath(transcode_path)
     real_file_path = os.path.realpath(file_path)
     if not real_file_path.startswith(real_transcode_path):
         flash("Invalid file path")
         return redirect(url_for("ui.completed"))
-    
+
     # Set download flag to trigger "Save As" dialog
     return send_file(file_path, as_attachment=True)
+
 
 @ui_bp.route("/completed/delete/<filename>", methods=["POST"])
 def delete_completed_transcode(filename):
     """Delete a completed transcode and its metadata file."""
     transcode_path = current_app.config["TRANSCODE_PATH"]
-    
+
     # Call the delete function from the completed module
     success, message = delete_transcode(filename, transcode_path)
-    
+
     if success:
         flash(f"Transcode deleted: {message}")
     else:
         flash(f"Error deleting transcode: {message}", "error")
-    
+
     return redirect(url_for("ui.completed"))

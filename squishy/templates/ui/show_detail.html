@@ -19,28 +19,24 @@
 
         <div class="show-info">
             <h1>{{ show.display_name }}</h1>
-            
+
             <div class="media-meta">
                 <span class="media-type-pill tv-type">TV Show</span>
                 <span class="seasons-pill">{{ show.seasons|length }} Season{% if show.seasons|length != 1 %}s{% endif %}</span>
                 <span class="episodes-pill">
-                    {% set episode_count = 0 %}
-                    {% for season in show.seasons.values() %}
-                        {% set episode_count = episode_count + season.episodes|length %}
-                    {% endfor %}
                     {{ episode_count }} Episode{% if episode_count != 1 %}s{% endif %}
                 </span>
             </div>
-            
+
             <p class="media-description">
                 {% if show.overview %}
                     {{ show.overview }}
                 {% else %}
-                    {{ show.title }} {% if show.year %}({{ show.year }}){% endif %} - 
+                    {{ show.title }} {% if show.year %}({{ show.year }}){% endif %} -
                     A television series with {{ show.seasons|length }} season{% if show.seasons|length != 1 %}s{% endif %}.
                 {% endif %}
             </p>
-            
+
             {% if show.genres or show.creators or show.actors or show.first_air_date or show.rating or show.content_rating or show.studio %}
             <div class="media-metadata">
                 {% if show.genres %}
@@ -49,42 +45,42 @@
                     <span class="metadata-value">{{ show.genres|join(', ') }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.creators %}
                 <div class="metadata-item">
                     <span class="metadata-label">Creator{% if show.creators|length > 1 %}s{% endif %}:</span>
                     <span class="metadata-value">{{ show.creators|join(', ') }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.actors %}
                 <div class="metadata-item">
                     <span class="metadata-label">Cast:</span>
                     <span class="metadata-value">{{ show.actors|join(', ') }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.first_air_date %}
                 <div class="metadata-item">
                     <span class="metadata-label">First Aired:</span>
                     <span class="metadata-value">{{ show.first_air_date[:10] }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.rating %}
                 <div class="metadata-item">
                     <span class="metadata-label">Rating:</span>
                     <span class="metadata-value">{{ '%0.1f'|format(show.rating) }}/10</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.content_rating %}
                 <div class="metadata-item">
                     <span class="metadata-label">Content Rating:</span>
                     <span class="metadata-value">{{ show.content_rating }}</span>
                 </div>
                 {% endif %}
-                
+
                 {% if show.studio %}
                 <div class="metadata-item">
                     <span class="metadata-label">Studio:</span>
@@ -106,18 +102,18 @@
                 <div class="episode-item card">
                     <div class="episode-info">
                         <h3 class="episode-title">{{ episode.display_name }}</h3>
-                        
+
                         {% if episode.overview %}
                         <p class="episode-overview">{{ episode.overview }}</p>
                         {% endif %}
-                        
+
                         {% if episode.air_date %}
                         <p class="episode-air-date">Aired: {{ episode.air_date[:10] }}</p>
                         {% endif %}
-                        
+
                         <div class="episode-technical-info">
                             <button class="toggle-info-btn button secondary small" onclick="toggleTechnicalInfo('{{ episode.id }}')">Show Technical Info</button>
-                            
+
                             <div id="technical-info-{{ episode.id }}" class="technical-info" style="display: none;">
                                 {% if episodes_info[episode.id] %}
                                 <h4>File Information</h4>
@@ -392,7 +388,7 @@
 function toggleTechnicalInfo(episodeId) {
     const infoDiv = document.getElementById(`technical-info-${episodeId}`);
     const button = event.target;
-    
+
     if (infoDiv.style.display === 'none') {
         infoDiv.style.display = 'block';
         button.textContent = 'Hide Technical Info';
