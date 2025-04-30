@@ -19,7 +19,80 @@
 
         <div class="show-info">
             <h1>{{ show.display_name }}</h1>
-            <p class="media-type">TV Show</p>
+            
+            <div class="media-meta">
+                <span class="media-type-pill tv-type">TV Show</span>
+                <span class="seasons-pill">{{ show.seasons|length }} Season{% if show.seasons|length != 1 %}s{% endif %}</span>
+                <span class="episodes-pill">
+                    {% set episode_count = 0 %}
+                    {% for season in show.seasons.values() %}
+                        {% set episode_count = episode_count + season.episodes|length %}
+                    {% endfor %}
+                    {{ episode_count }} Episode{% if episode_count != 1 %}s{% endif %}
+                </span>
+            </div>
+            
+            <p class="media-description">
+                {% if show.overview %}
+                    {{ show.overview }}
+                {% else %}
+                    {{ show.title }} {% if show.year %}({{ show.year }}){% endif %} - 
+                    A television series with {{ show.seasons|length }} season{% if show.seasons|length != 1 %}s{% endif %}.
+                {% endif %}
+            </p>
+            
+            {% if show.genres or show.creators or show.actors or show.first_air_date or show.rating or show.content_rating or show.studio %}
+            <div class="media-metadata">
+                {% if show.genres %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Genres:</span>
+                    <span class="metadata-value">{{ show.genres|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.creators %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Creator{% if show.creators|length > 1 %}s{% endif %}:</span>
+                    <span class="metadata-value">{{ show.creators|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.actors %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Cast:</span>
+                    <span class="metadata-value">{{ show.actors|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.first_air_date %}
+                <div class="metadata-item">
+                    <span class="metadata-label">First Aired:</span>
+                    <span class="metadata-value">{{ show.first_air_date[:10] }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.rating %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Rating:</span>
+                    <span class="metadata-value">{{ '%0.1f'|format(show.rating) }}/10</span>
+                </div>
+                {% endif %}
+                
+                {% if show.content_rating %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Content Rating:</span>
+                    <span class="metadata-value">{{ show.content_rating }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.studio %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Studio:</span>
+                    <span class="metadata-value">{{ show.studio }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -30,10 +103,129 @@
 
             <div class="episodes-list">
                 {% for episode in season.sorted_episodes %}
-                <div class="episode-item">
+                <div class="episode-item card">
                     <div class="episode-info">
                         <h3 class="episode-title">{{ episode.display_name }}</h3>
-                        <p class="episode-path">{{ episode.path }}</p>
+                        
+                        {% if episode.overview %}
+                        <p class="episode-overview">{{ episode.overview }}</p>
+                        {% endif %}
+                        
+                        {% if episode.air_date %}
+                        <p class="episode-air-date">Aired: {{ episode.air_date[:10] }}</p>
+                        {% endif %}
+                        
+                        <div class="episode-technical-info">
+                            <button class="toggle-info-btn button secondary small" onclick="toggleTechnicalInfo('{{ episode.id }}')">Show Technical Info</button>
+                            
+                            <div id="technical-info-{{ episode.id }}" class="technical-info" style="display: none;">
+                                {% if episodes_info[episode.id] %}
+                                <h4>File Information</h4>
+                                <div class="card tech-card">
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <th>File Path</th>
+                                                <td>{{ episode.path }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>File Size</th>
+                                                <td>{{ episodes_info[episode.id].file_size }}</td>
+                                            </tr>
+                                            {% if episodes_info[episode.id].has_error %}
+                                            <tr>
+                                                <th>Error</th>
+                                                <td class="text-danger">{{ episodes_info[episode.id].media_info.error }}</td>
+                                            </tr>
+                                            {% else %}
+                                            <tr>
+                                                <th>Format</th>
+                                                <td>{{ episodes_info[episode.id].media_info.format.format_name }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Duration</th>
+                                                <td>{{ '%0.2f'|format(episodes_info[episode.id].media_info.format.duration / 60) }} minutes</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Bitrate</th>
+                                                <td>{{ '%0.2f'|format(episodes_info[episode.id].media_info.format.bit_rate / 1000000) }} Mbps</td>
+                                            </tr>
+                                            {% endif %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {% if episodes_info[episode.id].media_info.video %}
+                                <h4>Video</h4>
+                                <div class="card tech-card">
+                                    {% for video in episodes_info[episode.id].media_info.video %}
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <th>Codec</th>
+                                                <td>{{ video.codec }} ({{ video.codec_description }})</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Resolution</th>
+                                                <td>{{ video.width }}x{{ video.height }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Frame Rate</th>
+                                                <td>{{ video.frame_rate }} fps</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Bit Depth</th>
+                                                <td>{{ video.bit_depth }} bit</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+
+                                {% if episodes_info[episode.id].media_info.hdr_info %}
+                                <h4>HDR Information</h4>
+                                <div class="card tech-card">
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <th>HDR Type</th>
+                                                <td>{{ episodes_info[episode.id].media_info.hdr_info.type }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {% endif %}
+
+                                {% if episodes_info[episode.id].media_info.audio %}
+                                <h4>Audio</h4>
+                                <div class="card tech-card">
+                                    {% for audio in episodes_info[episode.id].media_info.audio %}
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <th>Codec</th>
+                                                <td>{{ audio.codec }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Channels</th>
+                                                <td>{{ audio.channels }} ({{ audio.channel_layout }})</td>
+                                            </tr>
+                                            {% if audio.language %}
+                                            <tr>
+                                                <th>Language</th>
+                                                <td>{{ audio.language }}</td>
+                                            </tr>
+                                            {% endif %}
+                                        </tbody>
+                                    </table>
+                                    {% if not loop.last %}<div class="separator"></div>{% endif %}
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
 
                     <div class="episode-actions">
@@ -55,4 +247,172 @@
         {% endfor %}
     </div>
 </div>
+
+<style>
+.episode-technical-info {
+    margin-top: 0.5rem;
+}
+
+.toggle-info-btn {
+    margin-top: 0.5rem;
+}
+
+.technical-info {
+    margin-top: 1rem;
+}
+
+.technical-info h4 {
+    margin: 1rem 0 1rem;
+    color: var(--dark-color);
+    font-size: 1.1rem;
+}
+
+.tech-card {
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.tech-card:last-child {
+    margin-bottom: 0;
+}
+
+.tech-card table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tech-card table th,
+.tech-card table td {
+    padding: 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.tech-card table th {
+    width: 30%;
+    font-weight: bold;
+    color: var(--dark-color);
+}
+
+.separator {
+    margin: 1rem 0;
+    border-top: 1px dashed #ddd;
+}
+
+.episode-item {
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+
+.episode-title {
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.season-title {
+    margin-bottom: 1rem;
+}
+
+/* New styles for the show header */
+.show-header {
+    align-items: flex-start;
+}
+
+.show-info h1 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.media-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.media-type-pill,
+.seasons-pill,
+.episodes-pill {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.tv-type {
+    background-color: #9b59b625;
+    color: #9b59b6;
+}
+
+.seasons-pill {
+    background-color: #3498db25;
+    color: #3498db;
+}
+
+.episodes-pill {
+    background-color: #27ae6025;
+    color: #27ae60;
+}
+
+.media-description {
+    margin-bottom: 1rem;
+    color: #555;
+    line-height: 1.5;
+}
+
+.media-metadata {
+    margin-bottom: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.5rem 1rem;
+}
+
+.metadata-item {
+    display: flex;
+    align-items: baseline;
+}
+
+.metadata-label {
+    font-weight: 500;
+    color: var(--dark-color);
+    margin-right: 0.5rem;
+    white-space: nowrap;
+}
+
+.metadata-value {
+    color: #555;
+}
+</style>
+
+<script>
+function toggleTechnicalInfo(episodeId) {
+    const infoDiv = document.getElementById(`technical-info-${episodeId}`);
+    const button = event.target;
+    
+    if (infoDiv.style.display === 'none') {
+        infoDiv.style.display = 'block';
+        button.textContent = 'Hide Technical Info';
+    } else {
+        infoDiv.style.display = 'none';
+        button.textContent = 'Show Technical Info';
+    }
+}
+</script>
 {% endblock %}
+.episode-overview {
+    margin: 0.5rem 0;
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.episode-air-date {
+    margin: 0.5rem 0;
+    color: #777;
+    font-size: 0.8rem;
+    font-style: italic;
+}

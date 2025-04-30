@@ -10,6 +10,7 @@ from squishy.config import load_config
 from squishy.scanner import get_all_media, get_media, get_shows_and_movies, get_show
 from squishy.transcoder import create_job, get_job, start_transcode
 from squishy.completed import get_completed_transcodes, delete_transcode
+from squishy.media_info import get_media_info, format_file_size
 
 ui_bp = Blueprint("ui", __name__)
 
@@ -39,10 +40,18 @@ def media_detail(media_id):
     if media_item.type == "episode" and media_item.show_id:
         return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
     
+    # Get technical information about the media file
+    media_info = get_media_info(media_item.path)
+    
+    # Format file size for display
+    file_size = format_file_size(media_info.get("format", {}).get("size", 0))
+    
     return render_template(
         "ui/media_detail.html",
         media=media_item,
         profiles=config.profiles,
+        media_info=media_info,
+        file_size=file_size,
     )
 
 @ui_bp.route("/shows/<show_id>")
@@ -54,10 +63,44 @@ def show_detail(show_id):
         return redirect(url_for("ui.index"))
     
     config = load_config()
+    
+    # Get technical information for each episode
+    episodes_info = {}
+    for season in show.seasons.values():
+        for episode in season.episodes.values():
+            # Get technical information about the episode file
+            media_info = get_media_info(episode.path)
+            
+            # Check if media_info contains an error
+            if "error" in media_info:
+                episodes_info[episode.id] = {
+                    "media_info": {
+                        "format": {
+                            "format_name": "Unknown",
+                            "duration": 0,
+                            "bit_rate": 0,
+                            "size": 0
+                        },
+                        "video": [],
+                        "audio": [],
+                        "subtitle": [],
+                        "error": media_info["error"]
+                    },
+                    "file_size": "Unknown",
+                    "has_error": True
+                }
+            else:
+                episodes_info[episode.id] = {
+                    "media_info": media_info,
+                    "file_size": format_file_size(media_info.get("format", {}).get("size", 0)),
+                    "has_error": False
+                }
+    
     return render_template(
         "ui/show_detail.html",
         show=show,
         profiles=config.profiles,
+        episodes_info=episodes_info,
     )
 
 @ui_bp.route("/transcode/<media_id>", methods=["POST"])
