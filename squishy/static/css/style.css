@@ -84,13 +84,9 @@ nav ul li a:hover {
   padding: 0 2rem;
 }
 
-/* Flash messages */
+/* Flash messages (legacy - will be removed) */
 .flash {
-  padding: 1rem;
-  margin-bottom: 1rem;
-  background-color: var(--warning-color);
-  color: white;
-  border-radius: 4px;
+  display: none; /* Hide traditional flash messages since we're using notifications now */
 }
 
 /* Media grid */
@@ -1147,26 +1143,46 @@ hr {
   margin-right: 0.5rem;
 }
 
-/* Scan notification */
-.scan-notification {
+/* Notifications */
+#notification-container {
   position: fixed;
   bottom: 20px;
   right: 20px;
   z-index: 1000;
-  animation: slide-up 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
 }
 
-.scan-notification-content {
+.notification {
+  animation: slide-up 0.3s ease-out;
+  max-width: 320px;
+}
+
+.notification-content {
   background-color: rgba(44, 62, 80, 0.95);
   color: white;
   padding: 12px 20px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  max-width: 320px;
   text-align: center;
   font-size: 0.95rem;
   font-weight: 500;
   border-left: 4px solid var(--secondary-color);
+  margin-bottom: 10px;
+}
+
+.notification.success .notification-content {
+  border-left-color: var(--success-color);
+}
+
+.notification.error .notification-content {
+  border-left-color: var(--error-color);
+}
+
+.notification.warning .notification-content {
+  border-left-color: var(--warning-color);
 }
 
 @keyframes slide-up {
@@ -1177,6 +1193,15 @@ hr {
   100% {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 

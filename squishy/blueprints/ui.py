@@ -62,46 +62,31 @@ def show_detail(show_id):
 
     config = load_config()
 
-    # Get technical information for each episode
-    episodes_info = {}
+    # Count episodes for display and collect episode IDs for validation
+    episode_count = 0
+    episode_ids = []
+    valid_episode_ids = set()
+    
     for season in show.seasons.values():
-        for episode in season.episodes.values():
-            # Get technical information about the episode file
-            media_info = get_media_info(episode.path)
-
-            # Check if media_info contains an error
-            if "error" in media_info:
-                episodes_info[episode.id] = {
-                    "media_info": {
-                        "format": {
-                            "format_name": "Unknown",
-                            "duration": 0,
-                            "bit_rate": 0,
-                            "size": 0,
-                        },
-                        "video": [],
-                        "audio": [],
-                        "subtitle": [],
-                        "error": media_info["error"],
-                    },
-                    "file_size": "Unknown",
-                    "has_error": True,
-                }
+        for episode_id, episode in season.episodes.items():
+            episode_count += 1
+            # Verify each episode exists in MEDIA dictionary
+            media_item = get_media(episode_id)
+            if not media_item:
+                print(f"WARNING: Episode {episode_id} from show {show_id} not found in MEDIA dictionary")
             else:
-                episodes_info[episode.id] = {
-                    "media_info": media_info,
-                    "file_size": format_file_size(
-                        media_info.get("format", {}).get("size", 0)
-                    ),
-                    "has_error": False,
-                }
+                episode_ids.append(episode_id)
+                valid_episode_ids.add(episode_id)
+
+    # Log total episode count
+    print(f"Show {show_id} has {episode_count} episodes, {len(episode_ids)} valid in MEDIA dictionary")
 
     return render_template(
         "ui/show_detail.html",
         show=show,
         profiles=config.profiles,
-        episodes_info=episodes_info,
-        episode_count=len(episodes_info.keys()),
+        episode_count=episode_count,
+        valid_episode_ids=valid_episode_ids,
     )
 
 

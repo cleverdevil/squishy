@@ -236,6 +236,9 @@ def get_media_technical_info(media_id):
         return jsonify({"error": "Media not found"}), 404
     
     try:
+        # Log that we're processing this request
+        print(f"Processing technical info request for media ID: {media_id}")
+        
         # Get technical information about the media file
         media_info = get_media_info(media_item.path)
         
@@ -272,6 +275,16 @@ def get_media_technical_info(media_id):
         
         media_info["basic_info"] = basic_info
         
+        # Log successful processing
+        print(f"Successfully processed technical info for media ID: {media_id}")
+        
         return jsonify(media_info)
     except Exception as e:
+        # Log the error
+        import traceback
+        print(f"Error processing technical info for media ID: {media_id}")
+        print(f"Error: {str(e)}")
+        print(traceback.format_exc())
+        
         return jsonify({"error": f"Error getting technical info: {str(e)}"}), 500
+

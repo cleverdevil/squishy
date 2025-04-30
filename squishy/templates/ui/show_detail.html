@@ -112,114 +112,21 @@
                         {% endif %}
 
                         <div class="episode-technical-info">
-                            <button class="toggle-info-btn button secondary small" onclick="toggleTechnicalInfo('{{ episode.id }}')">Show Technical Info</button>
+                            {% if episode.id in valid_episode_ids %}
+                            <button class="toggle-info-btn button secondary small" data-episode-id="{{ episode.id }}" data-path="{{ episode.path }}">Show Technical Info</button>
+                            {% else %}
+                            <button class="button secondary small" disabled title="Technical info not available for this episode">No Technical Info Available</button>
+                            {% endif %}
 
                             <div id="technical-info-{{ episode.id }}" class="technical-info" style="display: none;">
-                                {% if episodes_info[episode.id] %}
-                                <h4>File Information</h4>
-                                <div class="card tech-card">
-                                    <table>
-                                        <tbody>
-                                            <tr>
-                                                <th>File Path</th>
-                                                <td>{{ episode.path }}</td>
-                                            </tr>
-                                            <tr>
-                                                <th>File Size</th>
-                                                <td>{{ episodes_info[episode.id].file_size }}</td>
-                                            </tr>
-                                            {% if episodes_info[episode.id].has_error %}
-                                            <tr>
-                                                <th>Error</th>
-                                                <td class="text-danger">{{ episodes_info[episode.id].media_info.error }}</td>
-                                            </tr>
-                                            {% else %}
-                                            <tr>
-                                                <th>Format</th>
-                                                <td>{{ episodes_info[episode.id].media_info.format.format_name }}</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Duration</th>
-                                                <td>{{ '%0.2f'|format(episodes_info[episode.id].media_info.format.duration / 60) }} minutes</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Bitrate</th>
-                                                <td>{{ '%0.2f'|format(episodes_info[episode.id].media_info.format.bit_rate / 1000000) }} Mbps</td>
-                                            </tr>
-                                            {% endif %}
-                                        </tbody>
-                                    </table>
+                                <!-- Technical info will be loaded here via API -->
+                                <div class="loading-container tech-loading">
+                                    <div class="loading-spinner"></div>
+                                    <p>Loading technical information...</p>
                                 </div>
-
-                                {% if episodes_info[episode.id].media_info.video %}
-                                <h4>Video</h4>
-                                <div class="card tech-card">
-                                    {% for video in episodes_info[episode.id].media_info.video %}
-                                    <table>
-                                        <tbody>
-                                            <tr>
-                                                <th>Codec</th>
-                                                <td>{{ video.codec }} ({{ video.codec_description }})</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Resolution</th>
-                                                <td>{{ video.width }}x{{ video.height }}</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Frame Rate</th>
-                                                <td>{{ video.frame_rate }} fps</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Bit Depth</th>
-                                                <td>{{ video.bit_depth }} bit</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                    {% endfor %}
+                                <div class="tech-content" style="display: none;">
+                                    <!-- Content will be filled dynamically -->
                                 </div>
-                                {% endif %}
-
-                                {% if episodes_info[episode.id].media_info.hdr_info %}
-                                <h4>HDR Information</h4>
-                                <div class="card tech-card">
-                                    <table>
-                                        <tbody>
-                                            <tr>
-                                                <th>HDR Type</th>
-                                                <td>{{ episodes_info[episode.id].media_info.hdr_info.type }}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {% endif %}
-
-                                {% if episodes_info[episode.id].media_info.audio %}
-                                <h4>Audio</h4>
-                                <div class="card tech-card">
-                                    {% for audio in episodes_info[episode.id].media_info.audio %}
-                                    <table>
-                                        <tbody>
-                                            <tr>
-                                                <th>Codec</th>
-                                                <td>{{ audio.codec }}</td>
-                                            </tr>
-                                            <tr>
-                                                <th>Channels</th>
-                                                <td>{{ audio.channels }} ({{ audio.channel_layout }})</td>
-                                            </tr>
-                                            {% if audio.language %}
-                                            <tr>
-                                                <th>Language</th>
-                                                <td>{{ audio.language }}</td>
-                                            </tr>
-                                            {% endif %}
-                                        </tbody>
-                                    </table>
-                                    {% if not loop.last %}<div class="separator"></div>{% endif %}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -308,6 +215,20 @@
     color: var(--primary-color);
 }
 
+.episode-overview {
+    margin: 0.5rem 0;
+    color: #555;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.episode-air-date {
+    margin: 0.5rem 0;
+    color: #777;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
 .season-title {
     margin-bottom: 1rem;
 }
@@ -382,33 +303,345 @@
 .metadata-value {
     color: #555;
 }
+
+/* Loading spinner for technical information */
+.loading-container.tech-loading {
+    padding: 1rem;
+}
+
+.loading-spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid var(--secondary-color);
+    width: 28px;
+    height: 28px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 0.5rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.error-message {
+    padding: 1rem;
+    background-color: #ffebee;
+    border-radius: 5px;
+    color: #d32f2f;
+    margin-bottom: 1rem;
+}
 </style>
 
 <script>
-function toggleTechnicalInfo(episodeId) {
-    const infoDiv = document.getElementById(`technical-info-${episodeId}`);
-    const button = event.target;
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handler to all technical info toggle buttons
+    const toggleButtons = document.querySelectorAll('.toggle-info-btn');
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const episodeId = this.getAttribute('data-episode-id');
+            toggleTechnicalInfo(episodeId, this);
+        });
+    });
 
-    if (infoDiv.style.display === 'none') {
-        infoDiv.style.display = 'block';
-        button.textContent = 'Hide Technical Info';
-    } else {
-        infoDiv.style.display = 'none';
-        button.textContent = 'Show Technical Info';
+    // Helper function to create a table row
+    function createTableRow(label, value) {
+        const row = document.createElement('tr');
+        const th = document.createElement('th');
+        const td = document.createElement('td');
+        
+        th.textContent = label;
+        td.textContent = value;
+        
+        row.appendChild(th);
+        row.appendChild(td);
+        
+        return row;
+    }
+
+    // Toggle technical information visibility and load if needed
+    function toggleTechnicalInfo(episodeId, button) {
+        const infoDiv = document.getElementById(`technical-info-${episodeId}`);
+        const techContent = infoDiv.querySelector('.tech-content');
+        const loadingElement = infoDiv.querySelector('.loading-container');
+        
+        if (infoDiv.style.display === 'none') {
+            // Show the container and loading indicator
+            infoDiv.style.display = 'block';
+            button.textContent = 'Hide Technical Info';
+            
+            // Check if we already loaded the data
+            if (techContent.innerHTML.trim() === '') {
+                loadingElement.style.display = 'flex';
+                techContent.style.display = 'none';
+                
+                // Since TV show episodes aren't always in the MEDIA dictionary,
+                // We should handle the case where technical info cannot be loaded
+                console.log('Loading technical info for episode:', episodeId);
+                
+                // Attempt to get path directly from the episode
+                const episodePath = button.getAttribute('data-path');
+                
+                // If we don't have a valid path, show error immediately
+                if (!episodePath) {
+                    techContent.innerHTML = `
+                        <div class="error-message">
+                            <p>Cannot load technical information: Episode data not available.</p>
+                        </div>
+                    `;
+                    loadingElement.style.display = 'none';
+                    techContent.style.display = 'block';
+                    return;
+                }
+                
+                // Fallback to a basic display of what we know
+                techContent.innerHTML = `
+                    <h4>File Information</h4>
+                    <div class="card tech-card">
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <th>File Path</th>
+                                    <td>${episodePath}</td>
+                                </tr>
+                                <tr>
+                                    <th>Technical Info</th>
+                                    <td>Not available - episode metadata is limited</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                // Hide loading indicator and show limited content
+                loadingElement.style.display = 'none';
+                techContent.style.display = 'block';
+                
+                // Optionally attempt to fetch anyway, but expect 404
+                fetch(`/api/media/${episodeId}/technical_info`)
+                    .then(response => {
+                        console.log('Received response:', response.status);
+                        if (!response.ok) {
+                            throw new Error('Failed to load technical information');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Received data:', data);
+                        // Generate the technical info content
+                        techContent.innerHTML = generateTechnicalInfoContent(data, episodeId);
+                        
+                        // Hide loading indicator and show content
+                        loadingElement.style.display = 'none';
+                        techContent.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error fetching technical info:', error);
+                        console.log('Error details:', error.message, error.stack);
+                        techContent.innerHTML = `
+                            <div class="error-message">
+                                <p>Error loading technical information: ${error.message}</p>
+                                <button onclick="retryLoadTechnicalInfo('${episodeId}')" class="button small">Retry</button>
+                            </div>
+                        `;
+                        
+                        // Hide loading indicator and show error content
+                        loadingElement.style.display = 'none';
+                        techContent.style.display = 'block';
+                        
+                        // Show notification error if the function exists
+                        if (typeof showNotification === 'function') {
+                            showNotification('Failed to load technical information. Please try again.', 'error');
+                        }
+                    });
+            } else {
+                // We already have the data, just show it
+                techContent.style.display = 'block';
+            }
+        } else {
+            // Hide the info div
+            infoDiv.style.display = 'none';
+            button.textContent = 'Show Technical Info';
+        }
+    }
+
+    // Generate HTML content for technical info
+    function generateTechnicalInfoContent(data, episodeId) {
+        let html = '';
+        
+        // File Information section
+        html += `
+            <h4>File Information</h4>
+            <div class="card tech-card">
+                <table>
+                    <tbody>
+                        <tr>
+                            <th>File Path</th>
+                            <td>${document.querySelector(`button[data-episode-id="${episodeId}"]`).getAttribute('data-path')}</td>
+                        </tr>
+                        <tr>
+                            <th>File Size</th>
+                            <td>${data.formatted_file_size || 'Unknown'}</td>
+                        </tr>
+                        <tr>
+                            <th>Format</th>
+                            <td>${data.format?.format_name || 'Unknown'}</td>
+                        </tr>
+                        <tr>
+                            <th>Duration</th>
+                            <td>${((data.format?.duration || 0) / 60).toFixed(2)} minutes</td>
+                        </tr>
+                        <tr>
+                            <th>Bitrate</th>
+                            <td>${((data.format?.bit_rate || 0) / 1000000).toFixed(2)} Mbps</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        // Video section
+        if (data.video && data.video.length > 0) {
+            html += `<h4>Video</h4>
+                <div class="card tech-card">`;
+            
+            data.video.forEach((video, index) => {
+                html += `
+                    <table>
+                        <tbody>
+                            <tr>
+                                <th>Codec</th>
+                                <td>${video.codec} (${video.codec_description})</td>
+                            </tr>
+                            <tr>
+                                <th>Resolution</th>
+                                <td>${video.width}x${video.height}</td>
+                            </tr>
+                            <tr>
+                                <th>Frame Rate</th>
+                                <td>${video.frame_rate} fps</td>
+                            </tr>
+                            <tr>
+                                <th>Bit Depth</th>
+                                <td>${video.bit_depth} bit</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                `;
+                
+                if (index < data.video.length - 1) {
+                    html += '<div class="separator"></div>';
+                }
+            });
+            
+            html += '</div>';
+        }
+        
+        // HDR section
+        if (data.hdr_info) {
+            html += `
+                <h4>HDR Information</h4>
+                <div class="card tech-card">
+                    <table>
+                        <tbody>
+                            <tr>
+                                <th>HDR Type</th>
+                                <td>${data.hdr_info.type || 'Unknown'}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        
+        // Audio section
+        if (data.audio && data.audio.length > 0) {
+            html += `<h4>Audio</h4>
+                <div class="card tech-card">`;
+            
+            data.audio.forEach((audio, index) => {
+                html += `
+                    <table>
+                        <tbody>
+                            <tr>
+                                <th>Codec</th>
+                                <td>${audio.codec}</td>
+                            </tr>
+                            <tr>
+                                <th>Channels</th>
+                                <td>${audio.channels} (${audio.channel_layout})</td>
+                            </tr>
+                            ${audio.language ? `
+                            <tr>
+                                <th>Language</th>
+                                <td>${audio.language}</td>
+                            </tr>
+                            ` : ''}
+                        </tbody>
+                    </table>
+                `;
+                
+                if (index < data.audio.length - 1) {
+                    html += '<div class="separator"></div>';
+                }
+            });
+            
+            html += '</div>';
+        }
+        
+        // Subtitle section
+        if (data.subtitle && data.subtitle.length > 0) {
+            html += `<h4>Subtitles</h4>
+                <div class="card tech-card">`;
+            
+            data.subtitle.forEach((subtitle, index) => {
+                html += `
+                    <table>
+                        <tbody>
+                            <tr>
+                                <th>Codec</th>
+                                <td>${subtitle.codec}</td>
+                            </tr>
+                            ${subtitle.language ? `
+                            <tr>
+                                <th>Language</th>
+                                <td>${subtitle.language}</td>
+                            </tr>
+                            ` : ''}
+                            ${subtitle.title ? `
+                            <tr>
+                                <th>Title</th>
+                                <td>${subtitle.title}</td>
+                            </tr>
+                            ` : ''}
+                        </tbody>
+                    </table>
+                `;
+                
+                if (index < data.subtitle.length - 1) {
+                    html += '<div class="separator"></div>';
+                }
+            });
+            
+            html += '</div>';
+        }
+        
+        return html;
+    }
+});
+
+// Global function to retry loading technical info
+function retryLoadTechnicalInfo(episodeId) {
+    const button = document.querySelector(`button[data-episode-id="${episodeId}"]`);
+    if (button) {
+        // Reset the display state
+        const infoDiv = document.getElementById(`technical-info-${episodeId}`);
+        const techContent = infoDiv.querySelector('.tech-content');
+        techContent.innerHTML = '';
+        
+        // Trigger the load again
+        button.click();
     }
 }
 </script>
 {% endblock %}
-.episode-overview {
-    margin: 0.5rem 0;
-    color: #555;
-    font-size: 0.9rem;
-    line-height: 1.4;
-}
-
-.episode-air-date {
-    margin: 0.5rem 0;
-    color: #777;
-    font-size: 0.8rem;
-    font-style: italic;
-}
