@@ -5,17 +5,29 @@
 {% block content %}
 <div class="completed-list">
     <h1>Completed Transcodes</h1>
-    
+
+
     {% if transcodes %}
     <div class="transcode-grid">
         {% for transcode in transcodes %}
         <div class="transcode-card">
             <div class="transcode-poster">
-                {% if transcode.poster_url %}
-                <img src="{{ transcode.poster_url }}" alt="{{ transcode.title }}">
+                {% if transcode.thumbnail_url or transcode.poster_url %}
+                <picture>
+                    <!-- Primary image with error handling: if thumbnail fails, try poster -->
+                    {% if transcode.thumbnail_url %}
+                    <img src="{{ transcode.thumbnail_url }}" alt="{{ transcode.title }}" 
+                         onerror="this.onerror=null; this.src='{{ transcode.poster_url or '' }}'; if(!this.src) this.parentNode.innerHTML='<div class=\'no-poster\'>No Poster</div>';">
+                    {% else %}
+                    <img src="{{ transcode.poster_url }}" alt="{{ transcode.title }}"
+                         onerror="this.onerror=null; this.parentNode.innerHTML='<div class=\'no-poster\'>No Poster</div>';">
+                    {% endif %}
+                </picture>
                 {% else %}
                 <div class="no-poster">No Poster</div>
                 {% endif %}
+                <!-- Add profile pill as overlay in top left corner -->
+                <div class="profile-pill-overlay">{{ transcode.profile_name }}</div>
             </div>
             <div class="transcode-details">
                 <div class="transcode-content">
@@ -33,25 +45,27 @@
                         {{ transcode.title }}
                         {% endif %}
                     </h3>
-                    <div class="transcode-meta">
-                        <span class="profile-name">{{ transcode.profile_name }}</span>
+                    
+                    <!-- Moved transcode info here from actions section -->
+                    <div class="transcode-info">
                         <span class="file-size">{{ transcode.size_comparison }}</span>
-                    </div>
-                    <div class="transcode-date">
-                        Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}
+                        <span class="transcode-date">Completed: {{ transcode.completed_at_datetime.strftime('%Y-%m-%d %H:%M') }}</span>
                     </div>
                 </div>
+
                 <div class="transcode-actions">
-                    <a href="{{ url_for('ui.download_file', filename=transcode.file_name) }}" 
-                       class="circle-button download-circle-button" title="Download">
-                        <img src="/static/img/download.svg" alt="Download" width="24" height="24">
-                    </a>
-                    <form action="{{ url_for('ui.delete_completed_transcode', filename=transcode.file_name) }}" method="post" class="delete-form">
-                        <button type="submit" class="circle-button cancel-button" title="Delete" 
-                                onclick="return confirm('Are you sure you want to delete this transcode? This cannot be undone.')">
-                            <img src="/static/img/cancel.svg" alt="Delete" width="24" height="24">
-                        </button>
-                    </form>
+                    <div class="transcode-actions-left">
+                        <a href="{{ url_for('ui.download_file', filename=transcode.file_name) }}"
+                           class="circle-button download-circle-button" data-tooltip="Download">
+                            <img src="/static/img/download.svg" alt="Download" width="24" height="24">
+                        </a>
+                        <form action="{{ url_for('ui.delete_completed_transcode', filename=transcode.file_name) }}" method="post" class="delete-form">
+                            <button type="submit" class="circle-button cancel-button" data-tooltip="Delete"
+                                    onclick="return confirm('Are you sure you want to delete this transcode? This cannot be undone.')">
+                                <img src="/static/img/cancel.svg" alt="Delete" width="24" height="24">
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>

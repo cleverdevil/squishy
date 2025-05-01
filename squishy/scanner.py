@@ -153,7 +153,9 @@ def scan_filesystem(media_paths: List[str]) -> List[MediaItem]:
                                     id=media_id,
                                     title=title,
                                     path=full_path,
-                                    year=year
+                                    year=year,
+                                    # For filesystem scans, we don't have separate thumbnails
+                                    # so leaving both poster_url and thumbnail_url as None
                                 )
                                 media_items.append(movie)
                                 MEDIA[media_id] = movie
@@ -274,6 +276,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         path=mapped_path,
                         year=item.get("ProductionYear"),
                         poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
+                        # Use Backdrop for thumbnail - it's typically a landscape image that works well as thumbnail
+                        thumbnail_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Backdrop?API_KEY={api_key}",
                         overview=item.get("Overview"),
                         tagline=tagline,
                         genres=genres,
@@ -409,7 +413,10 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 season_number=season_num,
                 show_id=show.id,
                 episode_number=episode_num,
+                # For episodes, the primary image is actually a thumbnail/screenshot
                 poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
+                # Use episode's actual thumbnail or backdrop if exists
+                thumbnail_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Thumb?API_KEY={api_key}",
                 overview=item.get("Overview"),
                 air_date=item.get("PremiereDate")
             )
@@ -543,7 +550,11 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                     title=item.get("title", "Unknown Movie"),
                                                     path=mapped_path,
                                                     year=item.get("year"),
-                                                    poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None
+                                                    poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None,
+                                                    # Use art or backdrop for thumbnail if available, fallback to poster/thumb
+                                                    thumbnail_url=f"{url}{item.get('art')}?X-Plex-Token={token}" if "art" in item else (
+                                                        f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None
+                                                    )
                                                 )
                                                 media_items.append(movie)
                                                 MEDIA[media_id] = movie
@@ -639,7 +650,10 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                                     season_number=season_num,
                                                                     show_id=show_id,
                                                                     episode_number=episode_num,
-                                                                    poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None
+                                                                    # For episodes, thumb is actually the thumbnail (screenshot from episode)
+                                                                    poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
+                                                                    # Use episode art as thumbnail if available
+                                                                    thumbnail_url=f"{url}{episode.get('art')}?X-Plex-Token={token}" if "art" in episode else None
                                                                 )
                                                                 
                                                                 # Add to TV show

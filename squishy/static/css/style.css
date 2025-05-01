@@ -889,24 +889,24 @@ hr {
   transform: scale(1.2);
 }
 
-.circle-button[title] {
-  position: relative;
-}
-
-.circle-button[title]:hover::after {
-  content: attr(title);
-  position: absolute;
-  top: -35px;
-  left: 50%;
-  transform: translateX(-50%);
+/* Custom tooltip solution */
+.tooltip-container {
+  position: fixed;
+  display: none;
   background-color: rgba(0, 0, 0, 0.8);
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;
-  white-space: nowrap;
-  z-index: 100;
+  z-index: 9999;
   pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Elements with tooltips */
+[data-tooltip] {
+  position: relative;
 }
 
 /* Apply colors to the SVG icons directly in the SVG files instead */
@@ -954,6 +954,7 @@ hr {
 .transcode-poster {
   height: 200px;
   overflow: hidden;
+  position: relative;
 }
 
 .transcode-poster img {
@@ -971,23 +972,48 @@ hr {
   color: #999;
 }
 
+.profile-pill-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background-color: rgba(52, 152, 219, 0.15);
+  color: #3498db;
+  z-index: 5;
+  background-color: rgba(52, 152, 219, 0.8);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
 .transcode-details {
-  padding: 1rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 100%;
+  flex-grow: 0;
+  min-height: 200px;
 }
 
 .transcode-content {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
 .transcode-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.1rem;
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.transcode-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
 }
 
 .episode-info {
@@ -996,34 +1022,26 @@ hr {
   margin-top: 0.25rem;
 }
 
-.transcode-meta {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.profile-name {
-  color: var(--primary-color);
-  font-weight: 500;
-}
-
 .file-size {
-  color: var(--secondary-color);
+  color: #27ae60;
 }
 
 .transcode-date {
-  font-size: 0.8rem;
-  color: var(--dark-color);
-  margin-bottom: 0;
+  color: #666;
 }
 
 .transcode-actions {
-  margin-top: auto;
-  padding-top: 1rem;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  border-top: 1px solid #eee;
+  padding-top: 0.5rem;
+}
+
+.transcode-actions-left {
   display: flex;
   gap: 0.5rem;
-  justify-content: flex-end;
 }
 
 .delete-form {

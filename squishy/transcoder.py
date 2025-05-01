@@ -1353,13 +1353,34 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             
             # Create JSON sidecar file with metadata
             sidecar_path = f"{output_path}.json"
+            
+            # Handle poster_url and thumbnail_url differently for Movies vs Episodes
+            poster_url = None
+            thumbnail_url = None
+            
+            if isinstance(media_item, Episode):
+                # For episodes, we want to use the parent show's poster as the poster_url
+                # and the episode's thumbnail as the thumbnail_url
+                from squishy.scanner import get_show
+                show = get_show(media_item.show_id)
+                if show:
+                    poster_url = show.poster_url
+                # Use the episode's thumbnail_url if available, otherwise fall back to poster_url
+                thumbnail_url = media_item.thumbnail_url or media_item.poster_url
+            else:
+                # For movies, use the movie's poster_url as poster
+                poster_url = media_item.poster_url
+                # Use movie's thumbnail_url if available, otherwise fall back to poster_url
+                thumbnail_url = media_item.thumbnail_url or media_item.poster_url
+            
             metadata = {
                 "original_path": media_item.path,
                 "media_id": media_item.id,
                 "title": media_item.title,
                 "year": media_item.year,
                 "type": media_item.type,  # Now using property from MediaItem subclasses
-                "poster_url": media_item.poster_url,
+                "poster_url": poster_url,
+                "thumbnail_url": thumbnail_url,
                 "profile_name": profile.name,
                 "completed_at": datetime.datetime.now().isoformat(),
                 "output_size": job.output_size,
