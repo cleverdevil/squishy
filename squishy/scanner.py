@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
-from squishy.models import MediaItem, Episode, TVShow
+from squishy.models import MediaItem, Movie, Episode, TVShow
 from squishy.config import load_config
 
 # In-memory media store - in a real application, this would be in a database
@@ -130,41 +130,33 @@ def scan_filesystem(media_paths: List[str]) -> List[MediaItem]:
                                         if title_match:
                                             episode_title = title_match.group(1).strip()
 
-                                    # Create and add the episode
+                                    # Create episode using the new Episode class (inherits from MediaItem)
                                     episode = Episode(
                                         id=media_id,
-                                        season_number=season_num,
-                                        episode_number=episode_num,
                                         title=episode_title,
-                                        year=year,
-                                        path=full_path
-                                    )
-                                    show.add_episode(episode)
-
-                                    # Also create a MediaItem for the episode
-                                    media_item = MediaItem(
-                                        id=media_id,
-                                        title=episode_title,
-                                        year=year,
-                                        type="episode",
                                         path=full_path,
-                                        show_id=show.id,
                                         season_number=season_num,
-                                        episode_number=episode_num
+                                        show_id=show.id,
+                                        episode_number=episode_num,
+                                        year=year
                                     )
-                                    media_items.append(media_item)
-                                    MEDIA[media_id] = media_item
+                                    
+                                    # Add to TV show
+                                    show.add_episode(episode)
+                                    
+                                    # Add to media items
+                                    media_items.append(episode)
+                                    MEDIA[media_id] = episode
                             else:
-                                # It's a movie
-                                media_item = MediaItem(
+                                # It's a movie - create a Movie instance
+                                movie = Movie(
                                     id=media_id,
                                     title=title,
-                                    year=year,
-                                    type="movie",
                                     path=full_path,
+                                    year=year
                                 )
-                                media_items.append(media_item)
-                                MEDIA[media_id] = media_item
+                                media_items.append(movie)
+                                MEDIA[media_id] = movie
 
     return media_items
 
@@ -241,7 +233,6 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
     stats["total_movies_found"] = len(movie_items)
     
     if movie_items:
-
         for item in movie_items:
             if "Path" in item:
                 media_id = str(uuid.uuid4())
@@ -276,12 +267,12 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                     if item.get("Genres") and isinstance(item.get("Genres"), list):
                         genres = [g.get("Name") for g in item.get("Genres") if isinstance(g, dict) and g.get("Name")]
                     
-                    media_item = MediaItem(
+                    # Create a Movie instance
+                    movie = Movie(
                         id=media_id,
                         title=item.get("Name", ""),
-                        year=item.get("ProductionYear"),
-                        type="movie",
                         path=mapped_path,
+                        year=item.get("ProductionYear"),
                         poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                         overview=item.get("Overview"),
                         tagline=tagline,
@@ -293,8 +284,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         content_rating=item.get("OfficialRating"),
                         studio=studio
                     )
-                    media_items.append(media_item)
-                    MEDIA[media_id] = media_item
+                    media_items.append(movie)
+                    MEDIA[media_id] = movie
                     stats["added_movies"] += 1
                 else:
                     stats["path_not_found"] += 1
@@ -409,35 +400,26 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             season_num = item.get("ParentIndexNumber", 0)
             episode_num = item.get("IndexNumber")
 
-            # Create the episode
+            # Create an Episode instance (inherits from MediaItem)
             episode = Episode(
                 id=media_id,
-                season_number=season_num,
-                episode_number=episode_num,
                 title=item.get("Name", ""),
-                year=item.get("ProductionYear"),
                 path=mapped_path,
+                year=item.get("ProductionYear"),
+                season_number=season_num,
+                show_id=show.id,
+                episode_number=episode_num,
+                poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                 overview=item.get("Overview"),
                 air_date=item.get("PremiereDate")
             )
+            
+            # Add to TV show
             show.add_episode(episode)
-
-            # Also create a MediaItem for the episode
-            media_item = MediaItem(
-                id=media_id,
-                title=item.get("Name", ""),
-                year=item.get("ProductionYear"),
-                type="episode",
-                path=mapped_path,
-                poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
-                show_id=show.id,
-                season_number=season_num,
-                episode_number=episode_num,
-                overview=item.get("Overview"),
-                release_date=item.get("PremiereDate")
-            )
-            media_items.append(media_item)
-            MEDIA[media_id] = media_item
+            
+            # Add to media items
+            media_items.append(episode)
+            MEDIA[media_id] = episode
             stats["added_episodes"] += 1
 
     # Log statistics
@@ -554,16 +536,17 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                     continue
 
                                                 media_id = str(uuid.uuid4())
-                                                media_item = MediaItem(
+                                                
+                                                # Create a Movie instance
+                                                movie = Movie(
                                                     id=media_id,
                                                     title=item.get("title", "Unknown Movie"),
-                                                    year=item.get("year"),
-                                                    type="movie",
                                                     path=mapped_path,
-                                                    poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None,
+                                                    year=item.get("year"),
+                                                    poster_url=f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None
                                                 )
-                                                media_items.append(media_item)
-                                                MEDIA[media_id] = media_item
+                                                media_items.append(movie)
+                                                MEDIA[media_id] = movie
                                                 stats["added_movies"] += 1
                                         except Exception as item_error:
                                             logging.error(f"Error processing movie item: {str(item_error)}")
@@ -647,31 +630,24 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                                 # Create a unique ID for this episode
                                                                 media_id = str(uuid.uuid4())
 
-                                                                # Create the Episode object
-                                                                ep = Episode(
-                                                                    id=media_id,
-                                                                    season_number=season_num,
-                                                                    episode_number=episode_num,
-                                                                    title=episode.get("title", f"Episode {episode_num}"),
-                                                                    year=episode.get("year"),
-                                                                    path=mapped_path
-                                                                )
-                                                                shows_by_key[show_key].add_episode(ep)
-
-                                                                # Create the MediaItem
-                                                                media_item = MediaItem(
+                                                                # Create an Episode instance (inherits from MediaItem)
+                                                                episode_obj = Episode(
                                                                     id=media_id,
                                                                     title=episode.get("title", f"Episode {episode_num}"),
-                                                                    year=episode.get("year"),
-                                                                    type="episode",
                                                                     path=mapped_path,
-                                                                    poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
-                                                                    show_id=show_id,
+                                                                    year=episode.get("year"),
                                                                     season_number=season_num,
-                                                                    episode_number=episode_num
+                                                                    show_id=show_id,
+                                                                    episode_number=episode_num,
+                                                                    poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None
                                                                 )
-                                                                media_items.append(media_item)
-                                                                MEDIA[media_id] = media_item
+                                                                
+                                                                # Add to TV show
+                                                                shows_by_key[show_key].add_episode(episode_obj)
+                                                                
+                                                                # Add to media items
+                                                                media_items.append(episode_obj)
+                                                                MEDIA[media_id] = episode_obj
                                                                 stats["added_episodes"] += 1
                                                         except Exception as episode_error:
                                                             logging.error(f"Error processing episode: {str(episode_error)}")
@@ -730,7 +706,7 @@ def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     # Filter movies to only include those with a valid path (skipping os.path.exists check which is slow)
     valid_movies = [
         item for item in MEDIA.values()
-        if item.type == "movie" and item.path
+        if isinstance(item, Movie) and item.path
     ]
 
     return shows_with_episodes, valid_movies

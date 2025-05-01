@@ -13,7 +13,7 @@ import select
 from typing import Dict, Optional, Tuple, List, Callable, Any
 
 from squishy.config import TranscodeProfile, load_config
-from squishy.models import TranscodeJob, MediaItem
+from squishy.models import TranscodeJob, MediaItem, Movie, Episode
 from squishy.scanner import get_media
 
 # Configure logging
@@ -1358,7 +1358,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                 "media_id": media_item.id,
                 "title": media_item.title,
                 "year": media_item.year,
-                "type": media_item.type,
+                "type": media_item.type,  # Now using property from MediaItem subclasses
                 "poster_url": media_item.poster_url,
                 "profile_name": profile.name,
                 "completed_at": datetime.datetime.now().isoformat(),
@@ -1367,7 +1367,7 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
             }
             
             # Add TV show specific metadata if applicable
-            if media_item.type == "episode" and media_item.show_id:
+            if isinstance(media_item, Episode):
                 metadata["show_id"] = media_item.show_id
                 metadata["season_number"] = media_item.season_number
                 metadata["episode_number"] = media_item.episode_number
