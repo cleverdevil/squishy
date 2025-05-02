@@ -12,7 +12,7 @@
     <header>
         <nav>
             <div class="logo">
-                <a href="{{ url_for('ui.index') }}">Squishy</a>
+                <a href="{{ url_for('ui.index') }}"><img src="/static/img/logo.png" alt="Squishy!"></a>
             </div>
             <ul>
                 <li><a href="{{ url_for('ui.index') }}">Home</a></li>
@@ -22,13 +22,13 @@
             </ul>
         </nav>
     </header>
-    
+
     <div class="container">
         <!-- We don't render flashed messages here anymore, they'll be shown via JavaScript notifications -->
-        
+
         {% block content %}{% endblock %}
     </div>
-    
+
     <div id="notification-container">
         <!-- Notifications will be added here dynamically -->
         <div id="scan-notification" class="notification scan-notification hidden">
@@ -37,24 +37,24 @@
             </div>
         </div>
     </div>
-    
+
     <footer>
         <p>&copy; Squishy - Media Transcoding Made Simple</p>
     </footer>
-    
+
     <!-- Third-party libraries -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
+
     <!-- Make flashed messages available to JavaScript -->
     <script>
         // Pass flashed messages to JavaScript
         const FLASHED_MESSAGES = {{ get_flashed_messages(with_categories=true)|tojson }};
     </script>
-    
+
     <!-- Core application scripts -->
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
     <script src="{{ url_for('static', filename='js/tooltips.js') }}"></script>
-    
+
     <!-- Page-specific scripts -->
     {% block scripts %}{% endblock %}
 </body>

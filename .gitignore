@@ -44,3 +44,4 @@ data/
 config/config.json
 config/*.json
 !config/config.example.json
+**/.claude/settings.local.json
