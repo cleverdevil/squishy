@@ -72,35 +72,13 @@ document.addEventListener('DOMContentLoaded', function() {
             form.action = form.action.replace('placeholder', episodeId);
             
             // Update modal title if needed
-            const modalHeader = modal.querySelector('.modal-header h3');
-            if (modalHeader && episodeTitle) {
-                modalHeader.textContent = `Squish: ${episodeTitle}`;
+            const modalTitle = document.getElementById('squishModalTitle');
+            if (modalTitle && episodeTitle) {
+                modalTitle.textContent = `Squish: ${episodeTitle}`;
             }
         });
     });
     
-    // Download Button Click Handler
-    document.querySelectorAll('.download-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const episodeId = this.getAttribute('data-episode-id');
-            
-            if (!episodeId) {
-                // Show notification if available
-                if (typeof showNotification === 'function') {
-                    showNotification('Download not available for this episode.', 'error');
-                }
-                return;
-            }
-            
-            // Show notification
-            if (typeof showNotification === 'function') {
-                showNotification('Starting download...', 'info');
-            }
-            
-            // Navigate to download endpoint
-            window.location.href = `/download-episode/${episodeId}`;
-        });
-    });
     
     // Modal Close Handlers
     document.querySelectorAll('.close-modal').forEach(closeBtn => {

@@ -1223,6 +1223,11 @@ hr {
   }
 }
 
+/* Utility classes */
+.hidden {
+  display: none !important;
+}
+
 /* Library toggle styles */
 .library-actions {
   display: flex;

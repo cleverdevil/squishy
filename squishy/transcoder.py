@@ -646,21 +646,38 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                     job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
                     
                     # If we've been at the same timestamp for multiple consecutive checks
-                    if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                    if job.progress_stalled_count > 300:  # Increased from 50 to 300 (about 30 seconds with 0.1s timeout)
                         # Check process status
                         process_status = get_process_status(process.pid)
                         logger.warning(f"Process {process.pid} appears stalled at {job.current_time}s with status {process_status}")
                         
-                        # If the process is zombie or has been stalled for too long, kill it
-                        if process_status == 'Z' or job.progress_stalled_count > 200:
-                            logger.error(f"Killing stalled process {process.pid} after {job.progress_stalled_count} checks")
-                            try:
-                                import signal
-                                os.kill(process.pid, signal.SIGKILL)
-                                process.poll()  # Force update the returncode
-                            except Exception as e:
-                                logger.error(f"Error killing process: {str(e)}")
-                            break
+                        # Only terminate if the process is a zombie or has been stalled for a very long time
+                        # And if we have no file growth at all (real stall, not just slow encoding)
+                        if process_status == 'Z' or job.progress_stalled_count > 600:
+                            output_size_bytes = 0
+                            file_growing = False
+                            
+                            # Check if output file exists and is growing
+                            if os.path.exists(output_path):
+                                current_size = os.path.getsize(output_path)
+                                # Store last size if we haven't already
+                                if not hasattr(job, 'last_file_size'):
+                                    job.last_file_size = current_size
+                                # Check if file is growing
+                                elif current_size > job.last_file_size:
+                                    file_growing = True
+                                    job.last_file_size = current_size
+                            
+                            # Only kill the process if it's a zombie or the file isn't growing at all
+                            if process_status == 'Z' or (job.progress_stalled_count > 600 and not file_growing):
+                                logger.error(f"Killing stalled process {process.pid} after {job.progress_stalled_count} checks")
+                                try:
+                                    import signal
+                                    os.kill(process.pid, signal.SIGKILL)
+                                    process.poll()  # Force update the returncode
+                                except Exception as e:
+                                    logger.error(f"Error killing process: {str(e)}")
+                                break
                 else:
                     # Reset stall counter if progress has changed
                     job.progress_stalled_count = 0
@@ -888,21 +905,38 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                                 job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
                                 
                                 # If we've been at the same timestamp for multiple consecutive checks
-                                if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                                if job.progress_stalled_count > 300:  # Increased from 50 to 300 (about 30 seconds with 0.1s timeout)
                                     # Check process status
                                     process_status = get_process_status(alt_process.pid)
                                     logger.warning(f"Alt process {alt_process.pid} appears stalled at {job.current_time}s with status {process_status}")
                                     
-                                    # If the process is zombie or has been stalled for too long, kill it
-                                    if process_status == 'Z' or job.progress_stalled_count > 200:
-                                        logger.error(f"Killing stalled alt process {alt_process.pid} after {job.progress_stalled_count} checks")
-                                        try:
-                                            import signal
-                                            os.kill(alt_process.pid, signal.SIGKILL)
-                                            alt_process.poll()  # Force update the returncode
-                                        except Exception as e:
-                                            logger.error(f"Error killing alt process: {str(e)}")
-                                        break
+                                    # Only terminate if the process is a zombie or has been stalled for a very long time
+                                    # And if we have no file growth at all (real stall, not just slow encoding)
+                                    if process_status == 'Z' or job.progress_stalled_count > 600:
+                                        output_size_bytes = 0
+                                        file_growing = False
+                                        
+                                        # Check if output file exists and is growing
+                                        if os.path.exists(output_path):
+                                            current_size = os.path.getsize(output_path)
+                                            # Store last size if we haven't already
+                                            if not hasattr(job, 'last_file_size'):
+                                                job.last_file_size = current_size
+                                            # Check if file is growing
+                                            elif current_size > job.last_file_size:
+                                                file_growing = True
+                                                job.last_file_size = current_size
+                                        
+                                        # Only kill the process if it's a zombie or the file isn't growing at all
+                                        if process_status == 'Z' or (job.progress_stalled_count > 600 and not file_growing):
+                                            logger.error(f"Killing stalled alt process {alt_process.pid} after {job.progress_stalled_count} checks")
+                                            try:
+                                                import signal
+                                                os.kill(alt_process.pid, signal.SIGKILL)
+                                                alt_process.poll()  # Force update the returncode
+                                            except Exception as e:
+                                                logger.error(f"Error killing alt process: {str(e)}")
+                                            break
                             else:
                                 # Reset stall counter if progress has changed
                                 job.progress_stalled_count = 0
@@ -1090,21 +1124,38 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                                 job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
                                 
                                 # If we've been at the same timestamp for multiple consecutive checks
-                                if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                                if job.progress_stalled_count > 300:  # Increased from 50 to 300 (about 30 seconds with 0.1s timeout)
                                     # Check process status
                                     process_status = get_process_status(hybrid_process.pid)
                                     logger.warning(f"Hybrid process {hybrid_process.pid} appears stalled at {job.current_time}s with status {process_status}")
                                     
-                                    # If the process is zombie or has been stalled for too long, kill it
-                                    if process_status == 'Z' or job.progress_stalled_count > 200:
-                                        logger.error(f"Killing stalled hybrid process {hybrid_process.pid} after {job.progress_stalled_count} checks")
-                                        try:
-                                            import signal
-                                            os.kill(hybrid_process.pid, signal.SIGKILL)
-                                            hybrid_process.poll()  # Force update the returncode
-                                        except Exception as e:
-                                            logger.error(f"Error killing hybrid process: {str(e)}")
-                                        break
+                                    # Only terminate if the process is a zombie or has been stalled for a very long time
+                                    # And if we have no file growth at all (real stall, not just slow encoding)
+                                    if process_status == 'Z' or job.progress_stalled_count > 600:
+                                        output_size_bytes = 0
+                                        file_growing = False
+                                        
+                                        # Check if output file exists and is growing
+                                        if os.path.exists(output_path):
+                                            current_size = os.path.getsize(output_path)
+                                            # Store last size if we haven't already
+                                            if not hasattr(job, 'last_file_size'):
+                                                job.last_file_size = current_size
+                                            # Check if file is growing
+                                            elif current_size > job.last_file_size:
+                                                file_growing = True
+                                                job.last_file_size = current_size
+                                        
+                                        # Only kill the process if it's a zombie or the file isn't growing at all
+                                        if process_status == 'Z' or (job.progress_stalled_count > 600 and not file_growing):
+                                            logger.error(f"Killing stalled hybrid process {hybrid_process.pid} after {job.progress_stalled_count} checks")
+                                            try:
+                                                import signal
+                                                os.kill(hybrid_process.pid, signal.SIGKILL)
+                                                hybrid_process.poll()  # Force update the returncode
+                                            except Exception as e:
+                                                logger.error(f"Error killing hybrid process: {str(e)}")
+                                            break
                             else:
                                 # Reset stall counter if progress has changed
                                 job.progress_stalled_count = 0
@@ -1285,21 +1336,38 @@ def transcode(job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfil
                             job.progress_stalled_count = getattr(job, 'progress_stalled_count', 0) + 1
                             
                             # If we've been at the same timestamp for multiple consecutive checks
-                            if job.progress_stalled_count > 50:  # About 5 seconds with 0.1s timeout in select
+                            if job.progress_stalled_count > 300:  # Increased from 50 to 300 (about 30 seconds with 0.1s timeout)
                                 # Check process status
                                 process_status = get_process_status(sw_process.pid)
                                 logger.warning(f"Software process {sw_process.pid} appears stalled at {job.current_time}s with status {process_status}")
                                 
-                                # If the process is zombie or has been stalled for too long, kill it
-                                if process_status == 'Z' or job.progress_stalled_count > 200:
-                                    logger.error(f"Killing stalled software process {sw_process.pid} after {job.progress_stalled_count} checks")
-                                    try:
-                                        import signal
-                                        os.kill(sw_process.pid, signal.SIGKILL)
-                                        sw_process.poll()  # Force update the returncode
-                                    except Exception as e:
-                                        logger.error(f"Error killing software process: {str(e)}")
-                                    break
+                                # Only terminate if the process is a zombie or has been stalled for a very long time
+                                # And if we have no file growth at all (real stall, not just slow encoding)
+                                if process_status == 'Z' or job.progress_stalled_count > 600:
+                                    output_size_bytes = 0
+                                    file_growing = False
+                                    
+                                    # Check if output file exists and is growing
+                                    if os.path.exists(output_path):
+                                        current_size = os.path.getsize(output_path)
+                                        # Store last size if we haven't already
+                                        if not hasattr(job, 'last_file_size'):
+                                            job.last_file_size = current_size
+                                        # Check if file is growing
+                                        elif current_size > job.last_file_size:
+                                            file_growing = True
+                                            job.last_file_size = current_size
+                                    
+                                    # Only kill the process if it's a zombie or the file isn't growing at all
+                                    if process_status == 'Z' or (job.progress_stalled_count > 600 and not file_growing):
+                                        logger.error(f"Killing stalled software process {sw_process.pid} after {job.progress_stalled_count} checks")
+                                        try:
+                                            import signal
+                                            os.kill(sw_process.pid, signal.SIGKILL)
+                                            sw_process.poll()  # Force update the returncode
+                                        except Exception as e:
+                                            logger.error(f"Error killing software process: {str(e)}")
+                                        break
                         else:
                             # Reset stall counter if progress has changed
                             job.progress_stalled_count = 0

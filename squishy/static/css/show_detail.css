@@ -123,16 +123,24 @@
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     background-color: white;
+    height: 160px; /* Fixed height for consistent card sizing */
 }
 
 .episode-artwork {
-    width: 180px;
-    height: 100px;
+    width: 280px; /* Increased width for better aspect ratio */
+    height: 100%;
     overflow: hidden;
     background-color: #f5f5f5;
+    flex-shrink: 0; /* Prevent artwork from shrinking */
 }
 
 .episode-artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.episode-thumbnail {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -154,6 +162,9 @@
     flex: 1;
     padding: 1rem;
     min-width: 0; /* Ensures text wrapping */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent content overflow */
 }
 
 .episode-title {
@@ -161,6 +172,9 @@
     margin-bottom: 0.5rem;
     color: var(--primary-color);
     font-size: 1.1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .episode-description {
@@ -168,10 +182,11 @@
     color: #555;
     font-size: 0.9rem;
     line-height: 1.4;
+    flex: 1; /* Allow description to take available space */
     /* Multi-line ellipsis for long descriptions */
     display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3; /* Limit to 3 lines */
+    -webkit-box-orient: vertical;  
     overflow: hidden;
 }
 
@@ -189,9 +204,10 @@
     padding: 1rem;
     border-left: 1px solid #eee;
     min-width: 120px;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
-.tech-info-btn, 
+.tech-info-btn,
 .squish-btn {
     padding: 0.5rem;
     border: none;
@@ -249,18 +265,7 @@ button:disabled {
     position: relative;
 }
 
-.modal-header {
-    padding: 1rem;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h3 {
-    margin: 0;
-    color: var(--dark-color);
-}
+/* Modal header styles removed to move header into body */
 
 .close-modal {
     position: absolute;
@@ -279,7 +284,15 @@ button:disabled {
 .modal-body {
     padding: 1.5rem;
     overflow-y: auto;
-    max-height: calc(80vh - 4rem);
+    max-height: calc(80vh - 2rem);
+}
+
+.modal-body h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: var(--dark-color);
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.5rem;
 }
 
 /* Loading Spinner */
@@ -402,32 +415,42 @@ button:disabled {
         align-items: center;
         gap: 1rem;
     }
-    
+
     .show-poster, .placeholder-poster {
         max-width: 180px;
     }
-    
+
     .show-info {
         text-align: center;
     }
-    
+
     .media-meta {
         justify-content: center;
     }
-    
+
     .episode-row {
         flex-direction: column;
+        height: auto; /* Reset fixed height on mobile */
+        max-height: none;
     }
-    
+
     .episode-artwork {
         width: 100%;
-        height: 120px;
+        height: 180px; /* Taller on mobile for better viewing */
     }
-    
+
     .episode-actions {
         flex-direction: row;
+        flex-wrap: wrap;
         border-left: none;
         border-top: 1px solid #eee;
         justify-content: space-around;
+        gap: 0.5rem;
+        padding: 0.8rem;
+    }
+
+    .episode-actions button {
+        flex: 1;
+        min-width: 110px;
     }
 }

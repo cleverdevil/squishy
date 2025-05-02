@@ -39,6 +39,9 @@ def create_app(test_config=None):
         MEDIA_PATH=config.media_path,
         TRANSCODE_PATH=config.transcode_path,
     )
+    
+    # Disable template caching in development mode
+    app.config['TEMPLATES_AUTO_RELOAD'] = True
 
     # Load the instance config, if it exists
     if test_config is None:

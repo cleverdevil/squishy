@@ -324,6 +324,28 @@ def download_file(filename):
     return send_file(file_path, as_attachment=True)
 
 
+@ui_bp.route("/download-episode/<media_id>")
+def download_episode(media_id):
+    """Serve an episode file for download."""
+    media_item = get_media(media_id)
+    if media_item is None:
+        flash("Media not found")
+        return redirect(url_for("ui.index"))
+    
+    # Verify the episode file exists
+    if not media_item.path or not os.path.exists(media_item.path) or not os.path.isfile(media_item.path):
+        flash("Episode file not found")
+        if media_item.show_id:
+            return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
+        return redirect(url_for("ui.index"))
+    
+    # Extract filename from path for attachment name
+    filename = os.path.basename(media_item.path)
+    
+    # Set download flag to trigger "Save As" dialog
+    return send_file(media_item.path, as_attachment=True, download_name=filename)
+
+
 @ui_bp.route("/completed/delete/<filename>", methods=["POST"])
 def delete_completed_transcode(filename):
     """Delete a completed transcode and its metadata file."""
