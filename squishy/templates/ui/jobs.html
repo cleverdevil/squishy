@@ -5,6 +5,11 @@
 {% block content %}
 <div class="jobs-list">
     <h1>Transcoding Jobs</h1>
+    
+    <!-- Anvil mascot animation container -->
+    <div id="mascot-container" class="hidden">
+        <img id="mascot-image" src="" alt="Squishy mascot">
+    </div>
 
     {# Macro for job row to avoid code duplication #}
     {% macro render_job_row(item, queue_index=0) %}

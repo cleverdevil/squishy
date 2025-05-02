@@ -1,6 +1,6 @@
 /**
  * Squishy Jobs Page JavaScript
- * Handles job updates, log displays, and auto-refreshing
+ * Handles job updates, log displays, auto-refreshing, and mascot animations
  */
 
 // Use WebSockets for real-time updates
@@ -8,11 +8,80 @@ let pageReloadTimer = null;
 const openLogStates = new Set();
 const STORAGE_KEY = 'squishyOpenLogs';
 const refreshIntervals = {};
+let currentMascotState = null; // Track current state of mascot animation
+
+// Mascot animation functions
+function showMascot(status, jobId) {
+    const mascotContainer = document.getElementById('mascot-container');
+    const mascotImage = document.getElementById('mascot-image');
+    
+    if (!mascotContainer || !mascotImage) return;
+    
+    // Remove any existing animation classes
+    mascotContainer.className = '';
+    
+    // Always show container
+    mascotContainer.classList.remove('hidden');
+    
+    // Set appropriate image and animation based on status
+    if (status === 'processing') {
+        mascotImage.src = '/static/img/anvil-thinking.png';
+        
+        // Select a random entry direction
+        const directions = ['mascot-processing', 'mascot-processing from-right', 'mascot-processing from-top', 'mascot-processing from-bottom'];
+        const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+        
+        mascotContainer.className = randomDirection;
+        currentMascotState = { status: 'processing', jobId: jobId };
+    } 
+    else if (status === 'completed') {
+        mascotImage.src = '/static/img/anvil-happy.png';
+        mascotContainer.className = 'mascot-success';
+        
+        // Hide mascot after the animation completes
+        currentMascotState = { status: 'completed', jobId: jobId };
+        setTimeout(() => {
+            // Only hide if this is still the current animation
+            if (currentMascotState && currentMascotState.status === 'completed' && currentMascotState.jobId === jobId) {
+                hideMascot();
+            }
+        }, 3000);
+    } 
+    else if (status === 'failed') {
+        mascotImage.src = '/static/img/anvil-sad.png';
+        mascotContainer.className = 'mascot-failed';
+        
+        // Hide mascot after a delay
+        currentMascotState = { status: 'failed', jobId: jobId };
+        setTimeout(() => {
+            // Only hide if this is still the current animation
+            if (currentMascotState && currentMascotState.status === 'failed' && currentMascotState.jobId === jobId) {
+                hideMascot();
+            }
+        }, 4000);
+    }
+}
+
+function hideMascot() {
+    const mascotContainer = document.getElementById('mascot-container');
+    if (mascotContainer) {
+        mascotContainer.classList.add('hidden');
+        currentMascotState = null;
+    }
+}
 
 // Initialize the page
 function initializePage() {
     if (pageReloadTimer) {
         clearTimeout(pageReloadTimer);
+    }
+    
+    // Check if there are any processing jobs to show mascot
+    const processingJobs = document.querySelectorAll('td.status-processing');
+    if (processingJobs.length > 0) {
+        // Get the job ID from the first processing job
+        const jobId = processingJobs[0].getAttribute('data-job-id');
+        showMascot('processing', jobId);
     }
 
     // Load saved open log states from localStorage
@@ -102,9 +171,18 @@ function updateJobElement(job) {
     // Check if the job status has changed
     const currentStatus = statusEl.className.split(' ').find(cls => cls.startsWith('status-')).replace('status-', '');
     if (currentStatus !== job.status) {
+        // Show appropriate mascot animation when a job changes status
+        if (job.status === 'completed' || job.status === 'failed') {
+            showMascot(job.status, job.id);
+        }
+        
         // Status has changed - we need to reload the page to move the job to the correct table
         saveOpenLogStates();
-        location.reload();
+        
+        // Give a little delay to see the animation before reload
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
         return;
     }
 

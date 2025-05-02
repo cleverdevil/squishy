@@ -1,4 +1,4 @@
-/* 
+/*
  * Squishy - Consolidated CSS file
  * ===============================
  * All styles for the Squishy application combined into a single optimized file.
@@ -18,7 +18,7 @@
  * 9. Media Grid & Library
  * 10. Media Details
  * 11. Show & Episode Styles
- * 12. Jobs & Progress 
+ * 12. Jobs & Progress
  * 13. Admin Styles
  * 14. Modals & Dialogs
  * 15. Notifications
@@ -91,6 +91,7 @@ h1 {
 
 h2 {
   color: var(--secondary-color);
+  border-bottom: 2px solid var(--secondary-color);
 }
 
 .section-header {
@@ -106,7 +107,10 @@ h2 {
 .section-header h1,
 .section-header h2 {
   margin-bottom: 0;
-  color: var(--primary-color);
+}
+
+.section-header h2 {
+  border-bottom: none;
 }
 
 .section-stats {
@@ -130,7 +134,6 @@ h2 {
 
 header {
   background-color: var(--primary-color);
-  color: var(--secondary-color);
   padding: 0.5rem 0;
   position: fixed;
   top: 0;
@@ -138,6 +141,7 @@ header {
   right: 0;
   height: 60px;
   z-index: 9999;
+  border-bottom: 0.5rem solid var(--accent-color);
 }
 
 nav {
@@ -158,7 +162,7 @@ nav {
 
 .logo img {
   position: fixed;
-  top: 0;
+  top: 0.5rem;
   height: 100px;
 }
 
@@ -176,19 +180,21 @@ nav ul li {
 }
 
 nav ul li.active {
-  background-color: white;
-  padding: 0rem 2rem 0rem 1rem;
-  clip-path: polygon(10% 0%, 90% 10%, 80% 100%, 0% 90%);
+  background-color: var(--accent-color);
+  padding: 1px 1rem;
+}
+nav ul li.active a {
+  color: white;
 }
 
 nav ul li a {
-  color: rgb(237, 56, 118);
   text-decoration: none;
   font-family: "Concert One", serif;
-  font-weight: 400;
+  font-weight: 300;
   font-style: normal;
   text-transform: lowercase;
   font-size: 20pt;
+  color: var(--accent-color);
 }
 
 nav ul li a:hover {
@@ -578,7 +584,7 @@ th, td {
   border-bottom: 1px solid #ddd;
 }
 
-th.align-right, 
+th.align-right,
 td.align-right {
   text-align: right !important;
   align-items: right !important;
@@ -636,10 +642,6 @@ tbody tr:hover {
 /* ========================================================================== */
 /* 9. Media Grid & Library
 /* ========================================================================== */
-
-.media-grid h1 {
-  margin-bottom: 1.5rem;
-}
 
 .grid {
   display: grid;
@@ -818,7 +820,7 @@ tbody tr:hover {
 /* ========================================================================== */
 
 .media-detail h1 {
-  margin: 2rem 0 1rem;
+  margin: 1rem 0 1rem;
   color: var(--primary-color);
 }
 
@@ -828,7 +830,6 @@ tbody tr:hover {
 
 .media-detail .admin-section h2 {
   margin-bottom: 1rem;
-  color: var(--dark-color);
 }
 
 .media-detail .card {
@@ -857,7 +858,7 @@ tbody tr:hover {
 }
 
 /* Media header styles */
-.media-header, 
+.media-header,
 .show-header {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -866,7 +867,7 @@ tbody tr:hover {
   align-items: flex-start;
 }
 
-.media-poster, 
+.media-poster,
 .show-poster {
   width: 100%;
   height: auto;
@@ -1010,8 +1011,6 @@ tbody tr:hover {
 
 .admin-section h2 {
   margin-bottom: 1rem;
-  color: var(--primary-color);
-  border-bottom: 2px solid var(--secondary-color);
   padding-bottom: 0.5rem;
 }
 
@@ -1160,7 +1159,7 @@ tbody tr:hover {
   /* Multi-line ellipsis for long descriptions */
   display: -webkit-box;
   -webkit-line-clamp: 3; /* Limit to 3 lines */
-  -webkit-box-orient: vertical;  
+  -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
@@ -1269,7 +1268,7 @@ tbody tr:hover {
 }
 
 /* ========================================================================== */
-/* 12. Jobs & Progress 
+/* 12. Jobs & Progress
 /* ========================================================================== */
 
 .jobs-list h1 {
@@ -1279,7 +1278,6 @@ tbody tr:hover {
 .jobs-list h2 {
   margin-top: 2rem;
   margin-bottom: 1rem;
-  border-bottom: 2px solid var(--secondary-color);
   padding-bottom: 0.5rem;
 }
 
@@ -1986,7 +1984,7 @@ progress {
   .container {
     padding: 0 1rem;
   }
-  
+
   /* Navigation */
   nav {
     flex-direction: column;
@@ -2001,7 +1999,7 @@ progress {
     margin-left: 1rem;
     margin-right: 1rem;
   }
-  
+
   /* Media headers */
   .media-header,
   .show-header {
@@ -2021,7 +2019,7 @@ progress {
   .placeholder-poster.large {
     font-size: 3rem;
   }
-  
+
   .show-info {
     text-align: center;
   }
@@ -2029,12 +2027,12 @@ progress {
   .media-meta {
     justify-content: center;
   }
-  
+
   /* Tables */
   th, td {
     padding: 0.5rem;
   }
-  
+
   /* Episodes */
   .episode-item {
     flex-direction: column;
@@ -2055,7 +2053,7 @@ progress {
   .episode-actions select {
     width: 100%;
   }
-  
+
   /* Episode rows */
   .episode-row {
     flex-direction: column;
@@ -2082,7 +2080,7 @@ progress {
     flex: 1;
     min-width: 110px;
   }
-  
+
   /* Search */
   .search-container form {
     flex-wrap: wrap;
@@ -2105,7 +2103,7 @@ progress {
     text-align: center;
     margin-left: 0.5rem;
   }
-  
+
   /* Pagination */
   .pagination {
     flex-direction: column;
@@ -2120,7 +2118,7 @@ progress {
     flex-wrap: wrap;
     justify-content: center;
   }
-  
+
   /* Section headers */
   .section-header {
     flex-direction: column;
@@ -2130,23 +2128,23 @@ progress {
   .section-stats {
     margin-top: 0.5rem;
   }
-  
+
   /* Library header */
   .library-header {
     flex-direction: column;
     align-items: flex-start;
   }
-    
+
   .search-container {
     margin-top: 1rem;
     width: 100%;
   }
-    
+
   .search-form {
     width: 100%;
     max-width: 100%;
   }
-  
+
   /* Admin */
   .path-mapping-row {
     grid-template-columns: 1fr;
@@ -2194,4 +2192,86 @@ progress {
   100% {
     opacity: 0;
   }
+}
+
+/* Mascot animations */
+@keyframes slide-in-from-left {
+  0% { transform: translateX(-150px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-from-right {
+  0% { transform: translateX(150px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-in-from-top {
+  0% { transform: translateY(-150px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slide-in-from-bottom {
+  0% { transform: translateY(150px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-30px); }
+  60% { transform: translateY(-15px); }
+}
+
+@keyframes sway {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Mascot container styling */
+#mascot-container {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 150px;
+  height: 150px;
+  z-index: 999;
+  pointer-events: none; /* Allow clicks to pass through */
+}
+
+#mascot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Animation classes */
+.mascot-processing {
+  animation: slide-in-from-left 1s ease forwards, sway 3s ease infinite;
+}
+
+.mascot-processing.from-right {
+  animation: slide-in-from-right 1s ease forwards, sway 3s ease infinite;
+}
+
+.mascot-processing.from-top {
+  animation: slide-in-from-top 1s ease forwards, sway 3s ease infinite;
+}
+
+.mascot-processing.from-bottom {
+  animation: slide-in-from-bottom 1s ease forwards, sway 3s ease infinite;
+}
+
+.mascot-success {
+  animation: bounce 2s ease 1;
+}
+
+.mascot-failed {
+  animation: sway 4s ease infinite;
+  transform-origin: top center;
 }

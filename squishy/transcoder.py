@@ -21,12 +21,15 @@ logger = logging.getLogger(__name__)
 
 # In-memory job store
 JOBS: Dict[str, TranscodeJob] = {}
+JOBS_LOCK = threading.RLock()  # Use RLock to allow re-entry from the same thread
 
 # Job queue for pending jobs
 JOB_QUEUE: List[Dict] = []
+JOB_QUEUE_LOCK = threading.RLock()
 
 # Currently running jobs
 RUNNING_JOBS = set()
+RUNNING_JOBS_LOCK = threading.RLock()
 
 
 def create_job(media_item: MediaItem, profile_name: str) -> TranscodeJob:
@@ -41,7 +44,8 @@ def create_job(media_item: MediaItem, profile_name: str) -> TranscodeJob:
         profile_name=profile_name,
         status="pending",
     )
-    JOBS[job_id] = job
+    with JOBS_LOCK:
+        JOBS[job_id] = job
     logger.debug(f"Created job with id={job_id}")
     return job
 
@@ -49,17 +53,20 @@ def create_job(media_item: MediaItem, profile_name: str) -> TranscodeJob:
 def get_job(job_id: str) -> Optional[TranscodeJob]:
     """Get a job by ID."""
     logger.debug(f"Getting job with id={job_id}")
-    return JOBS.get(job_id)
+    with JOBS_LOCK:
+        return JOBS.get(job_id)
 
 
 def get_running_job_count():
     """Get the number of currently running jobs."""
-    return len([j for j in JOBS.values() if j.status == "processing"])
+    with JOBS_LOCK:
+        return len([j for j in JOBS.values() if j.status == "processing"])
 
 
 def get_pending_jobs():
     """Get a list of all pending jobs from the JOBS dictionary."""
-    return [j for j in JOBS.values() if j.status == "pending"]
+    with JOBS_LOCK:
+        return [j for j in JOBS.values() if j.status == "pending"]
 
 
 def process_job_queue():
@@ -71,8 +78,12 @@ def process_job_queue():
     current_running = get_running_job_count()
     available_slots = max(0, max_jobs - current_running)
 
+    # Get queue length with thread safety
+    with JOB_QUEUE_LOCK:
+        queue_length = len(JOB_QUEUE)
+
     logger.debug(
-        f"Processing job queue: current_running={current_running}, max_jobs={max_jobs}, available_slots={available_slots}, queue_length={len(JOB_QUEUE)}"
+        f"Processing job queue: current_running={current_running}, max_jobs={max_jobs}, available_slots={available_slots}, queue_length={queue_length}"
     )
 
     # Also check for any pending jobs in the JOBS dictionary that might not be in the queue
@@ -80,15 +91,24 @@ def process_job_queue():
     logger.debug(f"Found {len(pending_jobs)} pending jobs in the JOBS dictionary")
 
     # First handle jobs in the JOB_QUEUE
-    if available_slots > 0 and JOB_QUEUE:
-        logger.debug(f"Starting up to {available_slots} jobs from queue")
-        # Get the next job(s) from the queue
-        jobs_to_start = min(available_slots, len(JOB_QUEUE))
-        for _ in range(jobs_to_start):
-            if not JOB_QUEUE:
-                break
-
-            job_data = JOB_QUEUE.pop(0)
+    jobs_to_process = []  # Initialize outside the conditional to avoid UnboundLocalError
+    
+    if available_slots > 0:
+        with JOB_QUEUE_LOCK:
+            if JOB_QUEUE:
+                logger.debug(f"Starting up to {available_slots} jobs from queue")
+                # Get the next job(s) from the queue
+                jobs_to_start = min(available_slots, len(JOB_QUEUE))
+                
+                # Get jobs from queue while holding the lock
+                for _ in range(jobs_to_start):
+                    if not JOB_QUEUE:
+                        break
+                    # Pop job data from the queue
+                    jobs_to_process.append(JOB_QUEUE.pop(0))
+        
+        # Process jobs outside the lock to avoid holding it for too long
+        for job_data in jobs_to_process:
             job_id = job_data["job_id"]
             media_item = job_data["media_item"]
             profile = job_data["profile"]
@@ -99,7 +119,7 @@ def process_job_queue():
                 # Start the job
                 _start_transcode_job(job, media_item, profile, output_dir)
                 logger.debug(
-                    f"Started queued job {job_id}, {len(JOB_QUEUE)} jobs remaining in queue"
+                    f"Started queued job {job_id}, jobs remaining in queue"
                 )
                 available_slots -= 1
             else:
@@ -115,7 +135,8 @@ def process_job_queue():
         )
 
         # Get the list of job IDs already in the queue
-        queued_job_ids = [job_data["job_id"] for job_data in JOB_QUEUE]
+        with JOB_QUEUE_LOCK:
+            queued_job_ids = [job_data["job_id"] for job_data in JOB_QUEUE]
 
         # Find the pending jobs not in the queue
         for job in pending_jobs:
@@ -174,30 +195,35 @@ def start_transcode(
         _start_transcode_job(job, media_item, profile, output_dir)
         logger.debug(f"Started job {job.id} immediately")
     else:
-        # Queue the job
-        JOB_QUEUE.append(
-            {
-                "job_id": job.id,
-                "media_item": media_item,
-                "profile": profile,
-                "output_dir": output_dir,
-            }
-        )
-        logger.debug(f"Queued job {job.id}, position in queue: {len(JOB_QUEUE)}")
+        # Queue the job with thread safety
+        with JOB_QUEUE_LOCK:
+            JOB_QUEUE.append(
+                {
+                    "job_id": job.id,
+                    "media_item": media_item,
+                    "profile": profile,
+                    "output_dir": output_dir,
+                }
+            )
+            queue_position = len(JOB_QUEUE)
+            
+        logger.debug(f"Queued job {job.id}, position in queue: {queue_position}")
 
 
 def _start_transcode_job(
     job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str
 ):
     """Internal function to start a transcoding job."""
-    # Add to running jobs set
-    RUNNING_JOBS.add(job.id)
+    # Add to running jobs set with thread safety
+    with RUNNING_JOBS_LOCK:
+        RUNNING_JOBS.add(job.id)
 
     # Define a callback for when the job finishes
     def job_finished_callback():
-        # Remove from running jobs
-        if job.id in RUNNING_JOBS:
-            RUNNING_JOBS.remove(job.id)
+        # Remove from running jobs with thread safety
+        with RUNNING_JOBS_LOCK:
+            if job.id in RUNNING_JOBS:
+                RUNNING_JOBS.remove(job.id)
 
         # Process the queue to see if we can start more jobs
         process_job_queue()
@@ -683,7 +709,10 @@ def run_ffmpeg_process(
     # Monitor progress
     while process.poll() is None:
         # Check if job has been cancelled
-        if job.status == "cancelled":
+        with job._lock:
+            is_cancelled = job.status == "cancelled"
+        
+        if is_cancelled:
             logger.info(f"Job {job.id} has been cancelled, terminating process")
             process.terminate()
             break
@@ -704,27 +733,34 @@ def run_ffmpeg_process(
                             current_time = (
                                 time_ms / 1000000
                             )  # Convert microseconds to seconds
-                            job.current_time = current_time
+                            
+                            # Thread-safe progress update
+                            job.update_progress(current_time)
+                            
+                            with job._lock:
+                                progress_value = job.progress
+                                duration_value = job.duration
+                                job_status = job.status
+                                job_current_time = job.current_time
+                                job_output_size = job.output_size
+                                
+                            logger.debug(f"Progress: {progress_value:.2%}")
 
-                            if job.duration:
-                                job.progress = min(current_time / job.duration, 0.99)
-                                logger.debug(f"Progress: {job.progress:.2%}")
+                            # Import here to avoid circular imports - emit progress every 2 seconds
+                            if int(current_time) % 2 == 0:
+                                from squishy.socket_events import emit_job_update
 
-                                # Import here to avoid circular imports - emit progress every 2 seconds
-                                if int(current_time) % 2 == 0:
-                                    from squishy.socket_events import emit_job_update
-
-                                    emit_job_update(
-                                        {
-                                            "id": job.id,
-                                            "media_id": job.media_id,
-                                            "status": job.status,
-                                            "progress": job.progress,
-                                            "current_time": job.current_time,
-                                            "duration": job.duration,
-                                            "output_size": job.output_size,
-                                        }
-                                    )
+                                emit_job_update(
+                                    {
+                                        "id": job.id,
+                                        "media_id": job.media_id,
+                                        "status": job_status,
+                                        "progress": progress_value,
+                                        "current_time": job_current_time,
+                                        "duration": duration_value,
+                                        "output_size": job_output_size,
+                                    }
+                                )
                         except (ValueError, IndexError) as e:
                             logger.warning(f"Error parsing time: {str(e)}")
 
@@ -741,66 +777,72 @@ def run_ffmpeg_process(
                     if len(log_lines) > max_log_lines:
                         log_lines.pop(0)
 
-        # Update job logs
-        job.ffmpeg_logs = log_lines
+        # Update job logs with thread safety
+        job.update_logs(log_lines)
 
         # Check output file size
         if os.path.exists(output_path):
             output_size = os.path.getsize(output_path)
-            job.output_size = format_file_size(output_size)
+            job.update_output_size(format_file_size(output_size))
 
-        # Check if process might be stuck (hanging)
-        if (
-            hasattr(job, "last_progress_time")
-            and job.current_time
-            and job.last_progress_time == job.current_time
-        ):
-            job.progress_stalled_count = getattr(job, "progress_stalled_count", 0) + 1
+        # Thread-safe access to check for stalled process
+        with job._lock:
+            last_progress_time = getattr(job, "last_progress_time", None)
+            current_time = job.current_time
+            stalled_count = getattr(job, "progress_stalled_count", 0)
+            
+            # Check if process might be stuck (hanging)
+            if last_progress_time is not None and current_time and last_progress_time == current_time:
+                # Increment stall counter with proper thread safety
+                job.progress_stalled_count = stalled_count + 1
+                updated_stalled_count = stalled_count + 1
+            else:
+                # Reset stall counter if progress has changed
+                job.progress_stalled_count = 0
+                updated_stalled_count = 0
+                
+            # Store last progress time for stall detection
+            if current_time:
+                job.last_progress_time = current_time
+                
+        # Handle stalled processes outside the lock to avoid holding it too long
+        if updated_stalled_count > 300:
+            # Check process status
+            process_status = get_process_status(process.pid)
+            logger.warning(
+                f"Process {process.pid} appears stalled at {current_time}s with status {process_status}"
+            )
 
-            # If we've been at the same timestamp for multiple consecutive checks
-            if job.progress_stalled_count > 300:
-                # Check process status
-                process_status = get_process_status(process.pid)
-                logger.warning(
-                    f"Process {process.pid} appears stalled at {job.current_time}s with status {process_status}"
-                )
+            # Only terminate if the process is a zombie or has been stalled for a very long time
+            # And if we have no file growth at all (real stall, not just slow encoding)
+            if process_status == "Z" or updated_stalled_count > 600:
+                file_growing = False
 
-                # Only terminate if the process is a zombie or has been stalled for a very long time
-                # And if we have no file growth at all (real stall, not just slow encoding)
-                if process_status == "Z" or job.progress_stalled_count > 600:
-                    file_growing = False
-
-                    # Check if output file exists and is growing
-                    if os.path.exists(output_path):
-                        current_size = os.path.getsize(output_path)
+                # Check if output file exists and is growing
+                if os.path.exists(output_path):
+                    current_size = os.path.getsize(output_path)
+                    
+                    with job._lock:
                         # Store last size if we haven't already
-                        if not hasattr(job, "last_file_size"):
+                        last_file_size = getattr(job, "last_file_size", None)
+                        if last_file_size is None:
                             job.last_file_size = current_size
                         # Check if file is growing
-                        elif current_size > job.last_file_size:
+                        elif current_size > last_file_size:
                             file_growing = True
                             job.last_file_size = current_size
 
-                    # Only kill the process if it's a zombie or the file isn't growing at all
-                    if process_status == "Z" or (
-                        job.progress_stalled_count > 600 and not file_growing
-                    ):
-                        logger.error(
-                            f"Killing stalled process {process.pid} after {job.progress_stalled_count} checks"
-                        )
-                        try:
-                            os.kill(process.pid, signal.SIGKILL)
-                            process.poll()  # Force update the returncode
-                        except Exception as e:
-                            logger.error(f"Error killing process: {str(e)}")
-                        break
-        else:
-            # Reset stall counter if progress has changed
-            job.progress_stalled_count = 0
-
-        # Store last progress time for stall detection
-        if job.current_time:
-            job.last_progress_time = job.current_time
+                # Only kill the process if it's a zombie or the file isn't growing at all
+                if process_status == "Z" or (updated_stalled_count > 600 and not file_growing):
+                    logger.error(
+                        f"Killing stalled process {process.pid} after {updated_stalled_count} checks"
+                    )
+                    try:
+                        os.kill(process.pid, signal.SIGKILL)
+                        process.poll()  # Force update the returncode
+                    except Exception as e:
+                        logger.error(f"Error killing process: {str(e)}")
+                    break
 
     # Get the final output
     stdout, stderr = process.communicate()
@@ -814,10 +856,9 @@ def run_ffmpeg_process(
         if line.strip():
             log_lines.append(f"STDERR: {line.strip()}")
 
-    # Update job logs one last time
-    job.ffmpeg_logs = (
-        log_lines[-max_log_lines:] if len(log_lines) > max_log_lines else log_lines
-    )
+    # Update job logs one last time with thread safety
+    final_logs = log_lines[-max_log_lines:] if len(log_lines) > max_log_lines else log_lines
+    job.update_logs(final_logs)
 
     return process.returncode, stdout, stderr
 
@@ -847,7 +888,8 @@ def transcode(
 ):
     """Perform the transcoding."""
     try:
-        job.status = "processing"
+        # Update status with thread safety
+        job.update_status("processing")
         logger.debug(f"Job {job.id} status changed to processing")
 
         # Get original filename without extension
@@ -1096,15 +1138,18 @@ def transcode(
 
         logger.debug(f"FFmpeg process completed successfully for job {job.id}")
 
-        # Update job status
-        job.status = "completed"
-        job.progress = 1.0
-        job.output_path = output_path
+        # Update job status with thread safety
+        job.update_status("completed")
+        
+        # Update progress and output path with thread safety
+        with job._lock:
+            job.progress = 1.0
+            job.output_path = output_path
 
         # Get final output file size
         if os.path.exists(output_path):
             output_size = os.path.getsize(output_path)
-            job.output_size = format_file_size(output_size)
+            job.update_output_size(format_file_size(output_size))
 
         logger.debug(
             f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}"
@@ -1161,14 +1206,29 @@ def transcode(
 
     except Exception as e:
         logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
-        job.status = "failed"
-        job.error_message = str(e)
+        
+        # Update job status with thread safety
+        job.update_status("failed")
+        
+        # Update error message with thread safety
+        with job._lock:
+            job.error_message = str(e)
 
         # Make sure to capture final error messages in logs
         if hasattr(e, "stderr") and e.stderr:
+            error_lines = []
+            
+            # Get current logs
+            with job._lock:
+                error_lines = list(job.ffmpeg_logs)
+                
+            # Add error lines
             for line in e.stderr.splitlines():
                 if line.strip():
-                    job.ffmpeg_logs.append(f"STDERR: {line.strip()}")
+                    error_lines.append(f"STDERR: {line.strip()}")
+            
+            # Update logs
+            job.update_logs(error_lines)
 
 
 def get_media_duration(ffmpeg_path: str, input_path: str) -> Optional[float]:
@@ -1376,30 +1436,53 @@ def cancel_job(job_id: str) -> bool:
         logger.warning(f"Attempted to cancel non-existent job: {job_id}")
         return False
 
-    if job.status == "pending":
-        # Check if job is in the queue
-        for i, queued_job in enumerate(JOB_QUEUE):
-            if queued_job["job_id"] == job_id:
-                # Remove from queue
-                JOB_QUEUE.pop(i)
-                job.status = "cancelled"
-                logger.info(f"Removed job {job_id} from queue")
-                return True
+    # Check if the job is pending
+    is_pending = False
+    with job._lock:
+        is_pending = job.status == "pending"
+        
+    if is_pending:
+        # Check if job is in the queue with thread safety
+        job_found = False
+        job_index = -1
+        
+        with JOB_QUEUE_LOCK:
+            for i, queued_job in enumerate(JOB_QUEUE):
+                if queued_job["job_id"] == job_id:
+                    # Mark index for removal
+                    job_index = i
+                    job_found = True
+                    break
+                    
+            # Remove from queue if found (still inside the lock)
+            if job_index >= 0:
+                JOB_QUEUE.pop(job_index)
+        
+        # Update job status if found in queue
+        if job_found:
+            job.update_status("cancelled")
+            logger.info(f"Removed job {job_id} from queue")
+            return True
 
+    # Check if the job is active
     if not job.is_active:
         logger.warning(f"Attempted to cancel job {job_id} with status {job.status}")
         return False
 
     logger.info(f"Cancelling job {job_id}")
-    job.status = "cancelled"
+    job.update_status("cancelled")
 
     # If the job has a process ID, try to terminate it directly
-    if job.process_id:
+    process_id = None
+    with job._lock:
+        process_id = job.process_id
+        
+    if process_id:
         try:
-            os.kill(job.process_id, signal.SIGTERM)
-            logger.info(f"Sent SIGTERM to process {job.process_id}")
+            os.kill(process_id, signal.SIGTERM)
+            logger.info(f"Sent SIGTERM to process {process_id}")
         except (ProcessLookupError, PermissionError) as e:
-            logger.warning(f"Could not terminate process {job.process_id}: {str(e)}")
+            logger.warning(f"Could not terminate process {process_id}: {str(e)}")
 
     return True
 
@@ -1421,15 +1504,25 @@ def remove_job(job_id: str) -> bool:
         return False
 
     # Only allow removing completed, failed, or cancelled jobs
-    if job.status not in ["completed", "failed", "cancelled"]:
-        logger.warning(f"Attempted to remove job {job_id} with status {job.status}")
+    # Use thread-safe access to job status
+    with job._lock:
+        job_status = job.status
+        is_removable = job_status in ["completed", "failed", "cancelled"]
+    
+    if not is_removable:
+        logger.warning(f"Attempted to remove job {job_id} with status {job_status}")
         return False
 
-    # Remove the job from the global jobs dictionary
+    # Remove the job from the global jobs dictionary with thread safety
     try:
-        del JOBS[job_id]
-        logger.info(f"Removed job {job_id} with status {job.status}")
-        return True
-    except KeyError:
-        logger.warning(f"Failed to remove job {job_id}: Job not found")
+        with JOBS_LOCK:
+            if job_id in JOBS:
+                del JOBS[job_id]
+                logger.info(f"Removed job {job_id} with status {job_status}")
+                return True
+            else:
+                logger.warning(f"Failed to remove job {job_id}: Job not found in dictionary")
+                return False
+    except Exception as e:
+        logger.warning(f"Failed to remove job {job_id}: {str(e)}")
         return False
