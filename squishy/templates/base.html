@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Squishy - Media Transcoding Made Simple{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/squishy.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Concert+One&display=swap" rel="stylesheet">
@@ -18,10 +17,10 @@
                 <a href="{{ url_for('ui.index') }}"><img src="/static/img/logo.png" alt="Squishy!"></a>
             </div>
             <ul>
-                <li><a href="{{ url_for('ui.index') }}">Home</a></li>
-                <li><a href="{{ url_for('ui.jobs') }}">Jobs</a></li>
-                <li><a href="{{ url_for('ui.completed') }}">Completed</a></li>
-                <li><a href="{{ url_for('admin.index') }}">Admin</a></li>
+                <li{% if request.endpoint == 'ui.index' %} class="active"{% endif %}><a href="{{ url_for('ui.index') }}">Home</a></li>
+                <li{% if request.endpoint == 'ui.jobs' %} class="active"{% endif %}><a href="{{ url_for('ui.jobs') }}">Jobs</a></li>
+                <li{% if request.endpoint == 'ui.completed' %} class="active"{% endif %}><a href="{{ url_for('ui.completed') }}">Completed</a></li>
+                <li{% if request.endpoint and request.endpoint.startswith('admin.') %} class="active"{% endif %}><a href="{{ url_for('admin.index') }}">Admin</a></li>
             </ul>
         </nav>
     </header>
