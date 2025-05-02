@@ -1,9 +1,21 @@
 /* Squishy - Main CSS file */
 
 /* Common styles */
+/* :root { */
+/*   --primary-color: #2c3e50; */
+/*   --secondary-color: #3498db; */
+/*   --accent-color: #e74c3c; */
+/*   --light-color: #ecf0f1; */
+/*   --dark-color: #2c3e50; */
+/*   --text-color: #333; */
+/*   --success-color: #27ae60; */
+/*   --warning-color: #f39c12; */
+/*   --error-color: #e74c3c; */
+/* } */
+
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #3498db;
+  --primary-color: rgb(255, 202, 28);
+  --secondary-color: rgb(20, 176, 161);
   --accent-color: #e74c3c;
   --light-color: #ecf0f1;
   --dark-color: #2c3e50;
@@ -32,14 +44,20 @@ a {
 }
 
 a:hover {
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 /* Header & Navigation */
 header {
   background-color: var(--primary-color);
-  color: white;
-  padding: 1rem 0;
+  color: var(--secondary-color);
+  padding: 0.5rem 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 9999;
 }
 
 nav {
@@ -58,6 +76,12 @@ nav {
   text-decoration: none;
 }
 
+.logo img {
+  position: fixed;
+  top: 0;
+  height: 100px;
+}
+
 nav ul {
   display: flex;
   list-style: none;
@@ -68,9 +92,13 @@ nav ul li {
 }
 
 nav ul li a {
-  color: white;
+  color:  rgb(237, 56, 118);
   text-decoration: none;
-  font-weight: 500;
+  font-family: "Concert One", serif;
+  font-weight: 400;
+  font-style: normal;
+  text-transform: lowercase;
+  font-size: 20pt;
 }
 
 nav ul li a:hover {
@@ -80,7 +108,7 @@ nav ul li a:hover {
 /* Container */
 .container {
   max-width: 1200px;
-  margin: 2rem auto;
+  margin: 8rem auto;
   padding: 0 2rem;
 }
 
