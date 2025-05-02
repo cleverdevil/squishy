@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show modal
             const modal = document.getElementById('techInfoModal');
+            modal.classList.remove('hidden');
             modal.style.display = 'flex';
             
             // Show loading, hide content
@@ -16,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const techInfoContent = document.getElementById('techInfoContent');
             
             loadingContainer.style.display = 'flex';
-            techInfoContent.style.display = 'none';
+            techInfoContent.classList.add('hidden');
             techInfoContent.innerHTML = '';
             
             // Fetch technical info
@@ -32,8 +33,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     techInfoContent.innerHTML = generateTechInfoContent(data, episodePath);
                     
                     // Hide loading, show content
-                    loadingContainer.style.display = 'none';
-                    techInfoContent.style.display = 'block';
+                    loadingContainer.classList.add('hidden');
+                    techInfoContent.classList.remove('hidden');
                 })
                 .catch(error => {
                     // Show error message
@@ -44,8 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     `;
                     
-                    loadingContainer.style.display = 'none';
-                    techInfoContent.style.display = 'block';
+                    loadingContainer.classList.add('hidden');
+                    techInfoContent.classList.remove('hidden');
                     
                     // Show notification if available
                     if (typeof showNotification === 'function') {
@@ -63,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show modal
             const modal = document.getElementById('squishModal');
+            modal.classList.remove('hidden');
             modal.style.display = 'flex';
             
             // Update form action
@@ -77,13 +79,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Download Button Click Handler
+    document.querySelectorAll('.download-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const episodeId = this.getAttribute('data-episode-id');
+            
+            if (!episodeId) {
+                // Show notification if available
+                if (typeof showNotification === 'function') {
+                    showNotification('Download not available for this episode.', 'error');
+                }
+                return;
+            }
+            
+            // Show notification
+            if (typeof showNotification === 'function') {
+                showNotification('Starting download...', 'info');
+            }
+            
+            // Navigate to download endpoint
+            window.location.href = `/download-episode/${episodeId}`;
+        });
+    });
+    
     // Modal Close Handlers
     document.querySelectorAll('.close-modal').forEach(closeBtn => {
         closeBtn.addEventListener('click', function() {
             // Find the parent modal and hide it
             const modal = this.closest('.modal');
             if (modal) {
-                modal.style.display = 'none';
+                modal.classList.add('hidden');
             }
         });
     });

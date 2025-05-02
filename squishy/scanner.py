@@ -415,8 +415,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 episode_number=episode_num,
                 # For episodes, the primary image is actually a thumbnail/screenshot
                 poster_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
-                # Use episode's actual thumbnail or backdrop if exists
-                thumbnail_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Thumb?API_KEY={api_key}",
+                # For episodes in Jellyfin, Primary also contains the landscape artwork
+                thumbnail_url=f"{url.rstrip('/')}/Items/{item['Id']}/Images/Primary?API_KEY={api_key}",
                 overview=item.get("Overview"),
                 air_date=item.get("PremiereDate")
             )
@@ -503,9 +503,12 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
 
                         if section_type == "movie":
                             stats["movie_sections"] += 1
-                            # Process movies
+                            # Process movies with all needed metadata
                             items_response = requests.get(
                                 f"{url}/library/sections/{section_id}/all",
+                                params={
+                                    "includeFields": "summary,originallyAvailableAt,rating,contentRating,thumb,art,tagline,studio,genre,director,role,year"
+                                },
                                 headers=headers
                             )
 
@@ -544,7 +547,24 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
 
                                                 media_id = str(uuid.uuid4())
                                                 
-                                                # Create a Movie instance
+                                                # Extract directors, actors, genres
+                                                directors = []
+                                                actors = []
+                                                genres = []
+                                                
+                                                # Extract directors
+                                                if "Director" in item and isinstance(item["Director"], list):
+                                                    directors = [director.get("tag") for director in item["Director"] if director.get("tag")]
+                                                
+                                                # Extract actors/roles
+                                                if "Role" in item and isinstance(item["Role"], list):
+                                                    actors = [role.get("tag") for role in item["Role"] if role.get("tag")][:5]  # limit to 5 actors
+                                                
+                                                # Extract genres
+                                                if "Genre" in item and isinstance(item["Genre"], list):
+                                                    genres = [genre.get("tag") for genre in item["Genre"] if genre.get("tag")]
+                                                
+                                                # Create a Movie instance with all metadata
                                                 movie = Movie(
                                                     id=media_id,
                                                     title=item.get("title", "Unknown Movie"),
@@ -554,7 +574,17 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                     # Use art or backdrop for thumbnail if available, fallback to poster/thumb
                                                     thumbnail_url=f"{url}{item.get('art')}?X-Plex-Token={token}" if "art" in item else (
                                                         f"{url}{item.get('thumb')}?X-Plex-Token={token}" if "thumb" in item else None
-                                                    )
+                                                    ),
+                                                    # Add additional metadata
+                                                    overview=item.get("summary"),
+                                                    tagline=item.get("tagline"),
+                                                    genres=genres,
+                                                    directors=directors,
+                                                    actors=actors,
+                                                    release_date=item.get("originallyAvailableAt"),
+                                                    rating=item.get("rating"),
+                                                    content_rating=item.get("contentRating"),
+                                                    studio=item.get("studio")
                                                 )
                                                 media_items.append(movie)
                                                 MEDIA[media_id] = movie
@@ -568,9 +598,12 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
 
                         elif section_type == "show":
                             stats["tv_sections"] += 1
-                            # First get all shows in the section
+                            # First get all shows in the section with all needed metadata
                             shows_response = requests.get(
                                 f"{url}/library/sections/{section_id}/all",
+                                params={
+                                    "includeFields": "summary,originallyAvailableAt,rating,contentRating,thumb,art,tagline,studio,genre,director,writer,producer,role,year"
+                                },
                                 headers=headers
                             )
 
@@ -587,17 +620,51 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                 continue
 
                                             show_id = str(uuid.uuid4())
+                                            # Extract genres, directors/creators, actors
+                                            genres = []
+                                            creators = []
+                                            actors = []
+                                            
+                                            # If show has genre tags, add them
+                                            if "Genre" in show and isinstance(show["Genre"], list):
+                                                genres = [genre.get("tag") for genre in show["Genre"] if genre.get("tag")]
+                                            
+                                            # If show has director/writer/producer tags, add them as creators
+                                            if "Director" in show and isinstance(show["Director"], list):
+                                                creators.extend([director.get("tag") for director in show["Director"] if director.get("tag")])
+                                            if "Writer" in show and isinstance(show["Writer"], list):
+                                                creators.extend([writer.get("tag") for writer in show["Writer"] if writer.get("tag")])
+                                            if "Producer" in show and isinstance(show["Producer"], list):
+                                                creators.extend([producer.get("tag") for producer in show["Producer"] if producer.get("tag")])
+                                            
+                                            # If show has role/actor tags, add them
+                                            if "Role" in show and isinstance(show["Role"], list):
+                                                actors = [role.get("tag") for role in show["Role"] if role.get("tag")][:5]  # limit to 5 actors
+                                            
+                                            # Create the TV show with all available metadata
                                             shows_by_key[show_key] = TVShow(
                                                 id=show_id,
                                                 title=show.get("title", "Unknown Show"),
                                                 year=show.get("year"),
                                                 poster_url=f"{url}{show.get('thumb')}?X-Plex-Token={token}" if "thumb" in show else None,
+                                                overview=show.get("summary"),
+                                                tagline=show.get("tagline"),
+                                                genres=genres,
+                                                creators=creators,
+                                                actors=actors,
+                                                first_air_date=show.get("originallyAvailableAt"),
+                                                rating=show.get("rating"),
+                                                content_rating=show.get("contentRating"),
+                                                studio=show.get("studio"),
                                             )
                                             TV_SHOWS[show_id] = shows_by_key[show_key]
 
-                                            # Get episodes for this show
+                                            # Get episodes for this show with all required fields
                                             episodes_response = requests.get(
                                                 f"{url}/library/metadata/{show_key}/allLeaves",
+                                                params={
+                                                    "includeFields": "summary,originallyAvailableAt,rating,contentRating,thumb,art,year,index,parentIndex"
+                                                },
                                                 headers=headers
                                             )
 
@@ -652,8 +719,15 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                                     episode_number=episode_num,
                                                                     # For episodes, thumb is actually the thumbnail (screenshot from episode)
                                                                     poster_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else None,
-                                                                    # Use episode art as thumbnail if available
-                                                                    thumbnail_url=f"{url}{episode.get('art')}?X-Plex-Token={token}" if "art" in episode else None
+                                                                    # Use thumb as thumbnail for episodes (it's the episode screenshot)
+                                                                    # Fall back to art if thumb is missing
+                                                                    thumbnail_url=f"{url}{episode.get('thumb')}?X-Plex-Token={token}" if "thumb" in episode else (
+                                                                        f"{url}{episode.get('art')}?X-Plex-Token={token}" if "art" in episode else None
+                                                                    ),
+                                                                    # Add episode details
+                                                                    overview=episode.get("summary"),
+                                                                    air_date=episode.get("originallyAvailableAt"),
+                                                                    rating=episode.get("rating")
                                                                 )
                                                                 
                                                                 # Add to TV show
