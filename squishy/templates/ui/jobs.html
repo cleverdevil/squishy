@@ -137,6 +137,9 @@
     </table>
     {% else %}
     <div class="empty-state">
+        <div class="empty-state-mascot">
+            <img src="/static/img/anvil-thinking.png" alt="No active jobs">
+        </div>
         <p>No active jobs.</p>
     </div>
     {% endif %}
@@ -163,6 +166,9 @@
     </table>
     {% else %}
     <div class="empty-state">
+        <div class="empty-state-mascot">
+            <img src="/static/img/anvil-happy-2.png" alt="No completed jobs">
+        </div>
         <p>No completed jobs.</p>
     </div>
     {% endif %}
@@ -172,6 +178,9 @@
 
     {% if not active_jobs and not completed_jobs and not failed_jobs %}
     <div class="empty-state">
+        <div class="empty-state-mascot">
+            <img src="/static/img/anvil-happy.png" alt="No failed jobs">
+        </div>
         <p>No cancelled or failed jobs.</p>
     </div>
     {% elif failed_jobs %}
@@ -194,6 +203,9 @@
     </table>
     {% else %}
     <div class="empty-state">
+        <div class="empty-state-mascot">
+            <img src="/static/img/anvil-happy.png" alt="No failed jobs">
+        </div>
         <p>No failed or cancelled jobs.</p>
     </div>
     {% endif %}

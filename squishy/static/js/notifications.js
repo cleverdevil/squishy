@@ -32,9 +32,22 @@ const notificationSystem = {
         notification.className = `notification ${type}`;
         notification.style.display = 'block';
         
+        // Choose mascot image based on notification type
+        let mascotImage = 'anvil-thinking.png';
+        if (type === 'success') {
+            mascotImage = Math.random() > 0.5 ? 'anvil-happy.png' : 'anvil-happy-2.png';
+        } else if (type === 'error') {
+            mascotImage = 'anvil-sad.png';
+        } else if (type === 'warning') {
+            mascotImage = 'anvil-surprised.png';
+        }
+        
         notification.innerHTML = `
             <div class="notification-content">
-                <span>${message}</span>
+                <div class="notification-mascot">
+                    <img src="/static/img/${mascotImage}" alt="Squishy mascot">
+                </div>
+                <span class="notification-message">${message}</span>
             </div>
         `;
         
@@ -63,21 +76,40 @@ const notificationSystem = {
     // Special method for scan notifications which have different behavior
     updateScanNotification: function(data) {
         const scanNotificationEl = document.getElementById('scan-notification');
-        const textEl = document.getElementById('scan-notification-text');
+        const contentEl = scanNotificationEl.querySelector('.notification-content');
         
         if (data.in_progress) {
             // Format message based on the source
             let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
             let message = `${source} scan in progress...`;
             
+            // Update HTML with mascot
+            contentEl.innerHTML = `
+                <div class="notification-mascot">
+                    <img src="/static/img/anvil-thinking.png" alt="Squishy mascot">
+                </div>
+                <span class="notification-message">${message}</span>
+            `;
+            
             // Show notification
-            textEl.textContent = message;
             scanNotificationEl.classList.remove('hidden');
         } else {
             // If completed recently, show completed message
             if (data.completed_at && (Date.now() / 1000 - data.completed_at < 5)) {
                 let source = data.source ? data.source.charAt(0).toUpperCase() + data.source.slice(1) : 'Media';
-                textEl.textContent = `${source} scan complete! Found ${data.item_count} items.`;
+                let message = `${source} scan complete! Found ${data.item_count} items.`;
+                
+                // Choose a happy mascot image
+                let mascotImage = Math.random() > 0.5 ? 'anvil-happy.png' : 'anvil-happy-2.png';
+                
+                // Update HTML with mascot
+                contentEl.innerHTML = `
+                    <div class="notification-mascot">
+                        <img src="/static/img/${mascotImage}" alt="Squishy mascot">
+                    </div>
+                    <span class="notification-message">${message}</span>
+                `;
+                
                 scanNotificationEl.classList.remove('hidden');
                 
                 // Hide after 3 seconds

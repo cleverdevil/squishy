@@ -1748,11 +1748,30 @@ progress {
   padding: 12px 20px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  text-align: center;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  border-left: 4px solid var(--secondary-color);
+}
+
+.notification-mascot {
+  width: 40px;
+  height: 40px;
+  margin-right: 15px;
+  flex-shrink: 0;
+}
+
+.notification-mascot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+}
+
+.notification-message {
+  flex: 1;
   font-size: 0.95rem;
   font-weight: 500;
-  border-left: 4px solid var(--secondary-color);
-  margin-bottom: 10px;
 }
 
 .notification.success .notification-content {
@@ -1765,6 +1784,17 @@ progress {
 
 .notification.warning .notification-content {
   border-left-color: var(--warning-color);
+}
+
+/* Mascot animation in notifications */
+.notification-mascot img {
+  animation: mascot-bounce 0.5s ease;
+}
+
+@keyframes mascot-bounce {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Custom tooltip solution */
@@ -1798,10 +1828,40 @@ progress {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state-mascot {
+  margin-bottom: 1.5rem;
+}
+
+.empty-state-mascot img {
+  max-width: 120px;
+  max-height: 120px;
 }
 
 .empty-state p {
   color: #777;
+  font-size: 1.1rem;
+}
+
+/* Jobs page specific empty states */
+.jobs-list .empty-state {
+  padding: 2rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.jobs-list .empty-state-mascot {
+  width: 120px;
+  height: 120px;
+}
+
+.jobs-list .empty-state p {
   font-size: 1.1rem;
 }
 
