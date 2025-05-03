@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  squishy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: squishy
+    restart: unless-stopped
+    ports:
+      - "5101:5101"
+    volumes:
+      - /path/to/config:/config
+      - /path/to/media:/media
+      - /path/to/transcodes:/transcodes
+    environment:
+      - TZ=${TZ:-UTC}
+      - PUID=1000
+      - PGID=1000
+    # Optional: Enable GPU passthrough
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu, compute, utility]
+    # Optional: Enable device passthrough for VA-API (uncomment if needed)
+    # devices:
+    #   - /dev/dri:/dev/dri

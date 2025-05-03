@@ -1,6 +1,6 @@
 {
-  "media_path": "/path/to/media",
-  "transcode_path": "/app/data/transcodes",
+  "media_path": "/media",
+  "transcode_path": "/transcodes",
   
   "_comment": "REQUIRED: Configure either Jellyfin OR Plex (not both). One of them must be set.",
   "jellyfin_url": "http://jellyfin:8096",
@@ -11,9 +11,13 @@
   "_plex_token": "your_plex_token",
   
   "path_mappings": {
-    "/path/on/plex/server": "/local/path/on/squishy/server",
-    "/media": "/opt/media"
+    "/path/on/media/server": "/media"
   },
+  "hw_accel": "vaapi",
+  "hw_device": "/dev/dri/renderD128",
+  "max_concurrent_jobs": 2,
+  "ffmpeg_path": "/usr/bin/ffmpeg",
+  "ffprobe_path": "/usr/bin/ffprobe",
   "profiles": [
     {
       "name": "high",
@@ -21,6 +25,8 @@
       "codec": "h264",
       "container": "mkv",
       "quality": "high",
+      "hw_accel": "vaapi",
+      "hw_device": "/dev/dri/renderD128",
       "allow_hw_failover": true
     },
     {
@@ -30,6 +36,7 @@
       "container": "mkv",
       "quality": "medium",
       "hw_accel": "vaapi",
+      "hw_device": "/dev/dri/renderD128",
       "allow_hw_failover": true
     },
     {

@@ -27,7 +27,7 @@ def perform_initial_scan(config: Config):
 
 def create_app(test_config=None):
     """Create and configure the Flask application."""
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(__name__)
 
     # Load configuration from config file
     config = load_config()
@@ -35,7 +35,6 @@ def create_app(test_config=None):
     # Load default configuration
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
-        DATABASE=os.path.join(app.instance_path, "squishy.sqlite"),
         MEDIA_PATH=config.media_path,
         TRANSCODE_PATH=config.transcode_path,
     )
@@ -43,15 +42,12 @@ def create_app(test_config=None):
     # Disable template caching in development mode
     app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-    # Load the instance config, if it exists
-    if test_config is None:
-        app.config.from_pyfile("config.py", silent=True)
-    else:
+    # Load test configuration if provided
+    if test_config is not None:
         app.config.from_mapping(test_config)
 
-    # Ensure the instance folder exists
+    # Ensure the transcode folder exists
     try:
-        os.makedirs(app.instance_path, exist_ok=True)
         os.makedirs(app.config["TRANSCODE_PATH"], exist_ok=True)
     except OSError:
         pass

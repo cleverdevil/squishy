@@ -4,7 +4,8 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    CONFIG_PATH=/config/config.json
 
 # Create app user
 RUN groupadd -r squishy && \
@@ -15,41 +16,50 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
     libva-dev \
-    vainfo \
+    va-driver-all \
     mesa-va-drivers \
-    intel-media-va-driver-non-free \
+    intel-media-va-driver \
+    i965-va-driver \
+    libva-drm2 \
+    libva-x11-2 \
+    libdrm2 \
+    libdrm-intel1 \
+    libvdpau1 \
     ocl-icd-opencl-dev \
+    vainfo \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Create necessary directories
-RUN mkdir -p /app/config /app/data/transcodes && \
+RUN mkdir -p /app && \
     chown -R squishy:squishy /app
-
-# Switch to app user
-USER squishy
 
 # Set working directory
 WORKDIR /app
 
 # Copy project files
-COPY --chown=squishy:squishy . /app/
+COPY . /app/
+RUN chown -R squishy:squishy /app
 
-# Create instance directory
-RUN mkdir -p /app/instance && \
-    chmod 755 /app/instance
+# Copy example config
+RUN cp /app/config/config.example.json /app/config.json.example
+
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Switch to app user for pip install
+USER squishy
 
 # Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install -e .
 
+# Switch back to root for entrypoint
+USER root
+
 # Expose port
 EXPOSE 5101
 
-# Set up config
-RUN if [ ! -f /app/config/config.json ]; then \
-    cp /app/config/config.example.json /app/config/config.json; \
-    fi
-
 # Command to run
-CMD ["python", "run.py"]
+ENTRYPOINT ["/entrypoint.sh"]

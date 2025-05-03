@@ -80,12 +80,12 @@ class Config:
 def load_config(config_path: str = None) -> Config:
     """Load configuration from a JSON file."""
     if config_path is None:
-        config_path = os.environ.get("CONFIG_PATH", "config/config.json")
+        config_path = os.environ.get("CONFIG_PATH", "./config/config.json")
 
     # Use default configuration as a fallback if config file doesn't exist
     default_config = {
         "media_path": "/media",
-        "transcode_path": "/app/data/transcodes",
+        "transcode_path": "/transcodes",
         "ffmpeg_path": "/usr/bin/ffmpeg",
         "ffprobe_path": "/usr/bin/ffprobe",  # Added default ffprobe path
         "path_mappings": {},
@@ -198,7 +198,7 @@ def load_config(config_path: str = None) -> Config:
 def save_config(config: Config, config_path: str = None) -> None:
     """Save configuration to a JSON file."""
     if config_path is None:
-        config_path = os.environ.get("CONFIG_PATH", "config/config.json")
+        config_path = os.environ.get("CONFIG_PATH", "./config/config.json")
 
     profiles_data = []
     for profile in config.profiles.values():
