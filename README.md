@@ -37,3 +37,62 @@ transcoding, and downloading your media as frictionless as possible:
 Squishy can be run manually from source, but the recommended installation method
 is to run Squishy as a Docker Container. The repository includes a
 `docker-compose.yml` file for your convenience.
+
+### Running with Docker
+
+1. Clone this repository:
+```bash
+git clone https://github.com/yourusername/squishy.git
+cd squishy
+```
+
+2. Configure Squishy:
+   - Copy the example configuration:
+   ```bash
+   cp config/config.example.json config/config.json
+   ```
+   - Edit `config/config.json` to set up your media paths, Jellyfin or Plex server details, and path mappings.
+
+3. Modify docker-compose.yml:
+   - Uncomment and edit the media path volume mounts in both Squishy and Jellyfin/Plex services
+   - Uncomment the appropriate GPU/hardware acceleration settings if needed
+   - Choose either Jellyfin or Plex (comment out the one you don't use)
+
+4. Start the containers:
+```bash
+docker-compose up -d
+```
+
+5. Access Squishy:
+   - Open your browser and navigate to `http://localhost:5101`
+   - If you included Jellyfin, it will be available at `http://localhost:8096`
+   - If you included Plex, it will be available at `http://localhost:32400/web`
+
+### Environment Variables
+
+You can customize the Docker setup with the following environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TRANSCODES_PATH` | Path where transcoded files will be stored | `./transcodes` |
+| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+| `DEBUG` | Enable Flask debug mode | `false` |
+| `SECRET_KEY` | Flask secret key | `default_development_key` |
+| `TZ` | Timezone | `UTC` |
+
+Example using environment variables:
+```bash
+TRANSCODES_PATH=/mnt/data/transcodes TZ=America/New_York docker-compose up -d
+```
+
+### Hardware Acceleration
+
+To enable hardware acceleration:
+
+1. For NVIDIA GPUs:
+   - Uncomment the `deploy` section in docker-compose.yml
+   - Make sure you have the NVIDIA Container Toolkit installed on your host
+
+2. For Intel/AMD GPUs (VA-API):
+   - Uncomment the `devices` section to pass through `/dev/dri` 
+   - Set the appropriate `hw_accel` in your transcoding profiles

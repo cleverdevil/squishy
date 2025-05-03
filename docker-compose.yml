@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  squishy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: squishy
+    restart: unless-stopped
+    ports:
+      - "5101:5101"
+    volumes:
+      - ./config:/app/config
+      - ./instance:/app/instance
+      - ${TRANSCODES_PATH:-./transcodes}:/app/data/transcodes
+      # Mount your media path (uncomment and modify as needed)
+      # - /path/to/your/media:/your/media/path
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      - SECRET_KEY=${SECRET_KEY:-default_development_key}
+      # Set timezone
+      - TZ=${TZ:-UTC}
+    # Optional: Enable GPU passthrough for NVIDIA GPU (uncomment if needed)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu, compute, utility]
+    # Optional: Enable device passthrough for VA-API (uncomment if needed)
+    # devices:
+    #   - /dev/dri:/dev/dri
+    depends_on:
+      - jellyfin
+    networks:
+      - squishy-net
+
+  # Optional: Include Jellyfin if you want to run it alongside Squishy
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./jellyfin/config:/config
+      - ./jellyfin/cache:/cache
+      # Mount your media path (uncomment and modify as needed)
+      # - /path/to/your/media:/media
+    environment:
+      - TZ=${TZ:-UTC}
+    # Optional: Enable GPU passthrough (uncomment if needed)
+    # devices:
+    #   - /dev/dri:/dev/dri
+    networks:
+      - squishy-net
+
+  # Optional: Include Plex if you prefer it over Jellyfin
+  # plex:
+  #   image: plexinc/pms-docker:latest
+  #   container_name: plex
+  #   restart: unless-stopped
+  #   ports:
+  #     - "32400:32400"
+  #   volumes:
+  #     - ./plex/config:/config
+  #     - ./plex/transcode:/transcode
+  #     # Mount your media path (uncomment and modify as needed)
+  #     # - /path/to/your/media:/media
+  #   environment:
+  #     - TZ=${TZ:-UTC}
+  #     - PLEX_CLAIM=${PLEX_CLAIM:-}
+  #   # Optional: Enable GPU passthrough (uncomment if needed)
+  #   # devices:
+  #   #   - /dev/dri:/dev/dri
+  #   networks:
+  #     - squishy-net
+
+networks:
+  squishy-net:
+    driver: bridge
