@@ -140,7 +140,9 @@
         <div class="empty-state-mascot">
             <img src="/static/img/anvil-thinking.png" alt="No active jobs">
         </div>
-        <p>No active jobs.</p>
+        <div class="speech-bubble">
+            No active jobs at the moment. Start a new transcode when you're ready!
+        </div>
     </div>
     {% endif %}
 
@@ -169,7 +171,9 @@
         <div class="empty-state-mascot">
             <img src="/static/img/anvil-happy-2.png" alt="No completed jobs">
         </div>
-        <p>No completed jobs.</p>
+        <div class="speech-bubble">
+            No completed jobs yet. They'll appear here when they're done!
+        </div>
     </div>
     {% endif %}
 
@@ -181,7 +185,9 @@
         <div class="empty-state-mascot">
             <img src="/static/img/anvil-happy.png" alt="No failed jobs">
         </div>
-        <p>No cancelled or failed jobs.</p>
+        <div class="speech-bubble">
+            No jobs in the system at all! I'm ready to start transcoding whenever you are.
+        </div>
     </div>
     {% elif failed_jobs %}
     <table>
@@ -206,7 +212,9 @@
         <div class="empty-state-mascot">
             <img src="/static/img/anvil-happy.png" alt="No failed jobs">
         </div>
-        <p>No failed or cancelled jobs.</p>
+        <div class="speech-bubble">
+            Great news! No failed or cancelled jobs. Everything's working perfectly.
+        </div>
     </div>
     {% endif %}
 </div>
