@@ -16,8 +16,8 @@ from flask import (
 
 from squishy.config import load_config, save_config, TranscodeProfile, Config
 from squishy.scanner import (
-    scan_filesystem, scan_jellyfin, scan_plex,
-    scan_filesystem_async, scan_jellyfin_async, scan_plex_async
+    scan_jellyfin, scan_plex,
+    scan_jellyfin_async, scan_plex_async
 )
 from squishy.transcoder import detect_hw_accel, process_job_queue, get_running_job_count
 
@@ -33,7 +33,7 @@ def index():
 
 @admin_bp.route("/scan", methods=["POST"])
 def scan():
-    """Scan for media files."""
+    """Scan for media files from media server."""
     scan_type = request.form["scan_type"]
     config = load_config()
 
@@ -44,7 +44,7 @@ def scan():
         scan_plex_async(config.plex_url, config.plex_token)
         flash("Plex scan started in background")
     else:
-        flash("Invalid scan type or missing configuration")
+        flash("Invalid scan type or missing configuration. Please configure either Jellyfin or Plex.")
 
     return redirect(url_for("admin.index"))
 

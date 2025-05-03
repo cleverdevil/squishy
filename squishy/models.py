@@ -141,13 +141,42 @@ class TranscodeJob:
     process_id: Optional[int] = None  # Store process ID for cancellation
     ffmpeg_command: Optional[str] = None  # Store the FFmpeg command for reference
     ffmpeg_logs: List[str] = field(default_factory=list)  # Store FFmpeg logs
+    
+    def __post_init__(self):
+        """Initialize a lock for thread-safe attribute updates."""
+        import threading
+        self._lock = threading.RLock()
+    
+    def update_progress(self, current_time: float):
+        """Thread-safe update of progress."""
+        with self._lock:
+            self.current_time = current_time
+            if self.duration:
+                self.progress = min(current_time / self.duration, 0.99)
+                
+    def update_status(self, status: str):
+        """Thread-safe update of job status."""
+        with self._lock:
+            self.status = status
+            
+    def update_output_size(self, size: str):
+        """Thread-safe update of output size."""
+        with self._lock:
+            self.output_size = size
+            
+    def update_logs(self, logs: List[str]):
+        """Thread-safe update of logs."""
+        with self._lock:
+            self.ffmpeg_logs = logs
 
     @property
     def is_complete(self) -> bool:
         """Check if the job is complete."""
-        return self.status == "completed"
+        with self._lock:
+            return self.status == "completed"
 
     @property
     def is_active(self) -> bool:
         """Check if the job is active (pending or processing)."""
-        return self.status in ("pending", "processing")
+        with self._lock:
+            return self.status in ("pending", "processing")

@@ -17,6 +17,10 @@ from squishy.config import load_config
 MEDIA: Dict[str, MediaItem] = {}
 TV_SHOWS: Dict[str, TVShow] = {}
 
+# Thread locks for shared dictionaries
+MEDIA_LOCK = threading.RLock()  # Use RLock to allow re-entry from the same thread
+TV_SHOWS_LOCK = threading.RLock()
+
 # Scanning status tracker
 SCAN_STATUS = {
     "in_progress": False,
@@ -25,25 +29,7 @@ SCAN_STATUS = {
     "completed_at": None,
     "item_count": 0
 }
-
-def extract_season_episode(filename: str) -> Tuple[Optional[int], Optional[int]]:
-    """Extract season and episode numbers from filename."""
-    # Common patterns: S01E01, 1x01, etc.
-    patterns = [
-        r'S(\d+)E(\d+)',          # S01E01
-        r'(\d+)x(\d+)',           # 1x01
-        r'Season\s*(\d+).*?Episode\s*(\d+)',  # Season 1 Episode 1
-        r'E(\d+)',                # E01 (assumes season 1)
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, filename, re.IGNORECASE)
-        if match:
-            season = int(match.group(1)) if len(match.groups()) > 1 else 1
-            episode = int(match.group(2 if len(match.groups()) > 1 else 1))
-            return season, episode
-
-    return None, None
+SCAN_STATUS_LOCK = threading.RLock()
 
 def apply_path_mapping(path: str) -> str:
     """Apply path mapping to convert media server paths to local paths."""
@@ -74,101 +60,21 @@ def apply_path_mapping(path: str) -> str:
     logging.debug(f"No path mapping applied, using original: {path}")
     return path
 
-def scan_filesystem(media_paths: List[str]) -> List[MediaItem]:
-    """Scan the filesystem for media files."""
-    media_items = []
-    shows_by_name: Dict[str, TVShow] = {}
-
-    # Clear existing TV shows
-    TV_SHOWS.clear()
-
-    for base_path in media_paths:
-        for root, _, files in os.walk(base_path):
-            for file in files:
-                if file.endswith(('.mkv', '.mp4', '.avi', '.mov')):
-                    # Extract title and year from filename using regex
-                    match = re.match(r'(.*?)(?:\s*\((\d{4})\))?\..*', file)
-                    if match:
-                        title, year_str = match.groups()
-                        title = title.replace(".", " ").strip()
-                        year = int(year_str) if year_str else None
-
-                        media_id = str(uuid.uuid4())
-                        full_path = os.path.join(root, file)
-
-                        # Ensure the file actually exists before adding
-                        if os.path.exists(full_path):
-                            # Determine if it's a movie or TV show based on path
-                            if "tv" in root.lower():
-                                # Try to extract season and episode info
-                                season_num, episode_num = extract_season_episode(file)
-
-                                # Extract show name (usually the parent directory)
-                                show_name = os.path.basename(os.path.dirname(root))
-                                if show_name.lower() in ('season', 'seasons', 'episodes'):
-                                    show_name = os.path.basename(os.path.dirname(os.path.dirname(root)))
-
-                                # Create or get TV show
-                                if show_name not in shows_by_name:
-                                    show_id = str(uuid.uuid4())
-                                    shows_by_name[show_name] = TVShow(
-                                        id=show_id,
-                                        title=show_name,
-                                        year=year
-                                    )
-                                    TV_SHOWS[show_id] = shows_by_name[show_name]
-
-                                show = shows_by_name[show_name]
-
-                                # Create episode with best-effort title extraction
-                                if season_num is not None:
-                                    episode_title = title
-                                    # Try to extract episode title
-                                    if episode_num is not None:
-                                        pattern = rf'S{season_num:02d}E{episode_num:02d}\s*-?\s*(.*)'
-                                        title_match = re.search(pattern, title, re.IGNORECASE)
-                                        if title_match:
-                                            episode_title = title_match.group(1).strip()
-
-                                    # Create episode using the new Episode class (inherits from MediaItem)
-                                    episode = Episode(
-                                        id=media_id,
-                                        title=episode_title,
-                                        path=full_path,
-                                        season_number=season_num,
-                                        show_id=show.id,
-                                        episode_number=episode_num,
-                                        year=year
-                                    )
-                                    
-                                    # Add to TV show
-                                    show.add_episode(episode)
-                                    
-                                    # Add to media items
-                                    media_items.append(episode)
-                                    MEDIA[media_id] = episode
-                            else:
-                                # It's a movie - create a Movie instance
-                                movie = Movie(
-                                    id=media_id,
-                                    title=title,
-                                    path=full_path,
-                                    year=year,
-                                    # For filesystem scans, we don't have separate thumbnails
-                                    # so leaving both poster_url and thumbnail_url as None
-                                )
-                                media_items.append(movie)
-                                MEDIA[media_id] = movie
-
-    return media_items
-
 def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
     """Scan a Jellyfin server for media."""
     media_items = []
     shows_by_id: Dict[str, TVShow] = {}
 
-    # Clear existing TV shows
-    TV_SHOWS.clear()
+    # Clear all existing media data (thread-safe)
+    with MEDIA_LOCK:
+        media_count = len(MEDIA)
+        MEDIA.clear()
+        logging.info(f"Cleared {media_count} existing media items before starting Jellyfin scan")
+        
+    with TV_SHOWS_LOCK:
+        shows_count = len(TV_SHOWS)
+        TV_SHOWS.clear()
+        logging.info(f"Cleared {shows_count} existing TV shows before starting Jellyfin scan")
 
     # Load config to check enabled libraries
     config = load_config()
@@ -289,7 +195,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                         studio=studio
                     )
                     media_items.append(movie)
-                    MEDIA[media_id] = movie
+                    with MEDIA_LOCK:
+                        MEDIA[media_id] = movie
                     stats["added_movies"] += 1
                 else:
                     stats["path_not_found"] += 1
@@ -361,7 +268,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
                 content_rating=item.get("OfficialRating"),
                 studio=studio
             )
-            TV_SHOWS[show_id] = shows_by_id[series_id]
+            with TV_SHOWS_LOCK:
+                TV_SHOWS[show_id] = shows_by_id[series_id]
 
     # Now fetch episodes - query each library separately
     episode_items = []
@@ -426,7 +334,8 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
             
             # Add to media items
             media_items.append(episode)
-            MEDIA[media_id] = episode
+            with MEDIA_LOCK:
+                MEDIA[media_id] = episode
             stats["added_episodes"] += 1
 
     # Log statistics
@@ -440,8 +349,16 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
     media_items = []
     shows_by_key: Dict[str, TVShow] = {}
 
-    # Clear existing TV shows
-    TV_SHOWS.clear()
+    # Clear all existing media data (thread-safe)
+    with MEDIA_LOCK:
+        media_count = len(MEDIA)
+        MEDIA.clear()
+        logging.info(f"Cleared {media_count} existing media items before starting Plex scan")
+        
+    with TV_SHOWS_LOCK:
+        shows_count = len(TV_SHOWS)
+        TV_SHOWS.clear()
+        logging.info(f"Cleared {shows_count} existing TV shows before starting Plex scan")
 
     # Load config to check enabled libraries
     config = load_config()
@@ -587,7 +504,8 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                     studio=item.get("studio")
                                                 )
                                                 media_items.append(movie)
-                                                MEDIA[media_id] = movie
+                                                with MEDIA_LOCK:
+                                                    MEDIA[media_id] = movie
                                                 stats["added_movies"] += 1
                                         except Exception as item_error:
                                             logging.error(f"Error processing movie item: {str(item_error)}")
@@ -657,7 +575,8 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                 content_rating=show.get("contentRating"),
                                                 studio=show.get("studio"),
                                             )
-                                            TV_SHOWS[show_id] = shows_by_key[show_key]
+                                            with TV_SHOWS_LOCK:
+                                                TV_SHOWS[show_id] = shows_by_key[show_key]
 
                                             # Get episodes for this show with all required fields
                                             episodes_response = requests.get(
@@ -735,7 +654,8 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                                                                 
                                                                 # Add to media items
                                                                 media_items.append(episode_obj)
-                                                                MEDIA[media_id] = episode_obj
+                                                                with MEDIA_LOCK:
+                                                                    MEDIA[media_id] = episode_obj
                                                                 stats["added_episodes"] += 1
                                                         except Exception as episode_error:
                                                             logging.error(f"Error processing episode: {str(episode_error)}")
@@ -766,19 +686,23 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
 
 def get_media(media_id: str) -> Optional[MediaItem]:
     """Get a media item by ID."""
-    return MEDIA.get(media_id)
+    with MEDIA_LOCK:
+        return MEDIA.get(media_id)
 
 def get_all_media() -> List[MediaItem]:
     """Get all media items."""
-    return list(MEDIA.values())
+    with MEDIA_LOCK:
+        return list(MEDIA.values())
 
 def get_all_shows() -> List[TVShow]:
     """Get all TV shows."""
-    return list(TV_SHOWS.values())
+    with TV_SHOWS_LOCK:
+        return list(TV_SHOWS.values())
 
 def get_show(show_id: str) -> Optional[TVShow]:
     """Get a TV show by ID."""
-    return TV_SHOWS.get(show_id)
+    with TV_SHOWS_LOCK:
+        return TV_SHOWS.get(show_id)
 
 def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     """
@@ -788,46 +712,26 @@ def get_shows_and_movies() -> Tuple[List[TVShow], List[MediaItem]]:
     - TV shows with no episodes
     - Movies with no video file (missing path)
     """
-    # Filter TV shows to only include those with episodes
-    shows_with_episodes = [show for show in TV_SHOWS.values() if show.seasons and any(season.episodes for season in show.seasons.values())]
+    # Get thread-safe copies of the data
+    with TV_SHOWS_LOCK:
+        # Filter TV shows to only include those with episodes
+        shows_with_episodes = [show for show in TV_SHOWS.values() if show.seasons and any(season.episodes for season in show.seasons.values())]
 
-    # Filter movies to only include those with a valid path (skipping os.path.exists check which is slow)
-    valid_movies = [
-        item for item in MEDIA.values()
-        if isinstance(item, Movie) and item.path
-    ]
+    with MEDIA_LOCK:
+        # Filter movies to only include those with a valid path (skipping os.path.exists check which is slow)
+        valid_movies = [
+            item for item in MEDIA.values()
+            if isinstance(item, Movie) and item.path
+        ]
 
     return shows_with_episodes, valid_movies
 
 def get_scan_status():
     """Get the current scanning status."""
-    return SCAN_STATUS
+    with SCAN_STATUS_LOCK:
+        # Return a copy to avoid race conditions with modifications after returning
+        return dict(SCAN_STATUS)
 
-def _run_scan_filesystem(media_paths: List[str]):
-    """Run filesystem scan in a separate thread."""
-    global SCAN_STATUS
-
-    # Import here to avoid circular imports
-    from squishy.socket_events import emit_scan_status
-
-    SCAN_STATUS["in_progress"] = True
-    SCAN_STATUS["source"] = "filesystem"
-    SCAN_STATUS["started_at"] = time.time()
-    SCAN_STATUS["item_count"] = 0
-
-    # Emit status update
-    emit_scan_status(SCAN_STATUS)
-
-    try:
-        media_items = scan_filesystem(media_paths)
-        SCAN_STATUS["item_count"] = len(media_items)
-    except Exception as e:
-        logging.error(f"Error during filesystem scan: {str(e)}")
-    finally:
-        SCAN_STATUS["in_progress"] = False
-        SCAN_STATUS["completed_at"] = time.time()
-        # Emit final status update
-        emit_scan_status(SCAN_STATUS)
 
 def _run_scan_jellyfin(url: str, api_key: str):
     """Run Jellyfin scan in a separate thread."""
@@ -836,24 +740,38 @@ def _run_scan_jellyfin(url: str, api_key: str):
     # Import here to avoid circular imports
     from squishy.socket_events import emit_scan_status
 
-    SCAN_STATUS["in_progress"] = True
-    SCAN_STATUS["source"] = "jellyfin"
-    SCAN_STATUS["started_at"] = time.time()
-    SCAN_STATUS["item_count"] = 0
+    # Update scan status with thread safety
+    with SCAN_STATUS_LOCK:
+        SCAN_STATUS["in_progress"] = True
+        SCAN_STATUS["source"] = "jellyfin"
+        SCAN_STATUS["started_at"] = time.time()
+        SCAN_STATUS["item_count"] = 0
+        
+        # Get a copy for emitting
+        status_copy = dict(SCAN_STATUS)
 
     # Emit status update
-    emit_scan_status(SCAN_STATUS)
+    emit_scan_status(status_copy)
 
     try:
         media_items = scan_jellyfin(url, api_key)
-        SCAN_STATUS["item_count"] = len(media_items)
+        
+        # Update item count with thread safety
+        with SCAN_STATUS_LOCK:
+            SCAN_STATUS["item_count"] = len(media_items)
     except Exception as e:
         logging.error(f"Error during Jellyfin scan: {str(e)}")
     finally:
-        SCAN_STATUS["in_progress"] = False
-        SCAN_STATUS["completed_at"] = time.time()
+        # Update completion status with thread safety
+        with SCAN_STATUS_LOCK:
+            SCAN_STATUS["in_progress"] = False
+            SCAN_STATUS["completed_at"] = time.time()
+            
+            # Get a copy for emitting
+            status_copy = dict(SCAN_STATUS)
+            
         # Emit final status update
-        emit_scan_status(SCAN_STATUS)
+        emit_scan_status(status_copy)
 
 def _run_scan_plex(url: str, token: str):
     """Run Plex scan in a separate thread."""
@@ -862,31 +780,39 @@ def _run_scan_plex(url: str, token: str):
     # Import here to avoid circular imports
     from squishy.socket_events import emit_scan_status
 
-    SCAN_STATUS["in_progress"] = True
-    SCAN_STATUS["source"] = "plex"
-    SCAN_STATUS["started_at"] = time.time()
-    SCAN_STATUS["item_count"] = 0
+    # Update scan status with thread safety
+    with SCAN_STATUS_LOCK:
+        SCAN_STATUS["in_progress"] = True
+        SCAN_STATUS["source"] = "plex"
+        SCAN_STATUS["started_at"] = time.time()
+        SCAN_STATUS["item_count"] = 0
+        
+        # Get a copy for emitting
+        status_copy = dict(SCAN_STATUS)
 
     # Emit status update
-    emit_scan_status(SCAN_STATUS)
+    emit_scan_status(status_copy)
 
     try:
         media_items = scan_plex(url, token)
-        SCAN_STATUS["item_count"] = len(media_items)
+        
+        # Update item count with thread safety
+        with SCAN_STATUS_LOCK:
+            SCAN_STATUS["item_count"] = len(media_items)
     except Exception as e:
         logging.error(f"Error during Plex scan: {str(e)}")
     finally:
-        SCAN_STATUS["in_progress"] = False
-        SCAN_STATUS["completed_at"] = time.time()
+        # Update completion status with thread safety
+        with SCAN_STATUS_LOCK:
+            SCAN_STATUS["in_progress"] = False
+            SCAN_STATUS["completed_at"] = time.time()
+            
+            # Get a copy for emitting
+            status_copy = dict(SCAN_STATUS)
+            
         # Emit final status update
-        emit_scan_status(SCAN_STATUS)
+        emit_scan_status(status_copy)
 
-def scan_filesystem_async(media_paths: List[str]):
-    """Start filesystem scan in a non-blocking thread."""
-    thread = threading.Thread(target=_run_scan_filesystem, args=(media_paths,))
-    thread.daemon = True
-    thread.start()
-    return thread
 
 def scan_jellyfin_async(url: str, api_key: str):
     """Start Jellyfin scan in a non-blocking thread."""
