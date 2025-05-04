@@ -11,6 +11,21 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="splash-content">
+            <div class="splash-mascot">
+                <img src="/static/img/anvil-happy.png" alt="Squishy Mascot">
+            </div>
+            <div class="splash-logo">
+                <img src="/static/img/logo.png" alt="Squishy!">
+            </div>
+            <div class="splash-loading">
+                <span class="dot-animation">Loading</span>
+            </div>
+        </div>
+    </div>
+    
     <header>
         <nav>
             <div class="logo">
@@ -52,7 +67,22 @@
         const FLASHED_MESSAGES = {{ get_flashed_messages(with_categories=true)|tojson }};
     </script>
 
+    <!-- Check for splash screen force parameter -->
+    <script>
+        // Add URL parameter parsing to support force displaying splash screen
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('splash')) {
+            // Delete the cookie to force splash to show
+            document.cookie = "squishy_last_splash=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            
+            // Remove the parameter from URL without refreshing page
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    </script>
+    
     <!-- Core application scripts -->
+    <script src="{{ url_for('static', filename='js/splash.js') }}"></script>
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
     <script src="{{ url_for('static', filename='js/tooltips.js') }}"></script>
 

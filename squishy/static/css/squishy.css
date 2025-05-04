@@ -2465,3 +2465,135 @@ progress {
   animation: sway 4s ease infinite;
   transform-origin: top center;
 }
+
+/* ========================================================================== */
+/* Splash Screen
+/* ========================================================================== */
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Tilting animation for logo and mascot */
+@keyframes tiltLeftRight {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+
+/* Zoom animation for logo and mascot */
+@keyframes pulseZoom {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Combined tilt and zoom animation */
+@keyframes zoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tiltAndZoom {
+  0%, 100% { 
+    transform: rotate(0deg) scale(1); 
+  }
+  25% { 
+    transform: rotate(-5deg) scale(1.03); 
+  }
+  75% { 
+    transform: rotate(5deg) scale(1.03); 
+  }
+}
+
+#splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.92);
+  background-image: url('/static/img/background.jpg');
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10000;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.splash-content {
+  text-align: center;
+  padding: 2rem;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.splash-logo {
+  margin-bottom: 1rem;
+  display: block;
+  position: relative;
+  animation: zoomIn 0.8s ease-out 0.4s forwards, tiltAndZoom 3s ease-in-out 1.2s infinite;
+  width: 100%;
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.splash-logo img {
+  max-width: 95%;
+  max-height: 300px;
+  filter: drop-shadow(0 0 25px rgba(255, 202, 28, 0.8));
+}
+
+.splash-mascot {
+  margin-bottom: 1rem;
+  display: block;
+  animation: zoomIn 0.8s ease-out forwards, tiltAndZoom 3s ease-in-out 0.8s infinite reverse;
+  width: 100%;
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.splash-mascot img {
+  max-height: 250px;
+  filter: drop-shadow(0 0 15px rgba(144, 79, 168, 0.8));
+}
+
+.splash-loading {
+  margin-top: 2rem;
+  font-family: 'Concert One', cursive;
+  color: white;
+  font-size: 1.8rem;
+  text-shadow: 0 0 10px rgba(144, 79, 168, 0.8);
+  animation: fadeIn 1s ease-in 1.5s forwards;
+  opacity: 0;
+}
+
+.dot-animation:after {
+  content: '.';
+  animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
+}
+
+.fade-out {
+  animation: fadeOut 0.5s ease-in-out forwards;
+}
