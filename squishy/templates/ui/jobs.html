@@ -16,7 +16,7 @@
     <tr data-job-id="{{ item.job.id }}">
         <td>{{ item.media_title }}</td>
         <td>{{ item.file_size }}</td>
-        <td>{{ item.job.profile_name }}</td>
+        <td>{{ item.job.preset_name }}</td>
         <td class="status-{{ item.job.status }} status" data-job-id="{{ item.job.id }}">
             {{ item.job.status }}
             {% if item.job.status == "pending" and queue_index > 0 %}
@@ -123,7 +123,7 @@
             <tr>
                 <th>Media</th>
                 <th>Size</th>
-                <th>Profile</th>
+                <th>Preset</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Actions</th>
@@ -154,7 +154,7 @@
             <tr>
                 <th>Media</th>
                 <th>Size</th>
-                <th>Profile</th>
+                <th>Preset</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Actions</th>
@@ -195,7 +195,7 @@
             <tr>
                 <th>Media</th>
                 <th>Size</th>
-                <th>Profile</th>
+                <th>Preset</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Actions</th>

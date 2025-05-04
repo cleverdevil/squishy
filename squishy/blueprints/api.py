@@ -95,22 +95,26 @@ def get_media_item(media_id):
         "poster_url": media_item.poster_url,
     })
 
-@api_bp.route("/profiles", methods=["GET"])
-def list_profiles():
-    """List all transcoding profiles."""
+@api_bp.route("/presets", methods=["GET"])
+def list_presets():
+    """List all transcoding presets."""
     config = load_config()
     
     return jsonify({
-        "profiles": [
+        "presets": [
             {
-                "name": profile.name,
-                "resolution": profile.resolution,
-                "codec": profile.codec,
-                "container": profile.container,
-                "quality": profile.quality,
-                "bitrate": profile.bitrate,
+                "name": name,
+                "codec": preset.get("codec", "h264"),
+                "scale": preset.get("scale", "1080p"),
+                "container": preset.get("container", ".mkv"),
+                "crf": preset.get("crf"),
+                "bitrate": preset.get("bitrate"),
+                "audio_codec": preset.get("audio_codec", "aac"),
+                "audio_bitrate": preset.get("audio_bitrate", "128k"),
+                "force_software": preset.get("force_software", False),
+                "allow_fallback": preset.get("allow_fallback", True),
             }
-            for profile in config.profiles.values()
+            for name, preset in config.presets.items()
         ]
     })
 
@@ -118,25 +122,25 @@ def list_profiles():
 def transcode():
     """Start a transcoding job."""
     data = request.json
-    if not data or "media_id" not in data or "profile" not in data:
+    if not data or "media_id" not in data or "preset" not in data:
         return jsonify({"error": "Missing required fields"}), 400
     
     media_id = data["media_id"]
-    profile_name = data["profile"]
+    preset_name = data["preset"]
     
     media_item = get_media(media_id)
     if media_item is None:
         return jsonify({"error": "Media not found"}), 404
     
     config = load_config()
-    if profile_name not in config.profiles:
-        return jsonify({"error": "Invalid profile"}), 400
+    if preset_name not in config.presets:
+        return jsonify({"error": "Invalid preset"}), 400
     
-    job = create_job(media_item, profile_name)
+    job = create_job(media_item, preset_name)
     start_transcode(
         job,
         media_item,
-        config.profiles[profile_name],
+        preset_name,
         current_app.config["TRANSCODE_PATH"],
     )
     
@@ -144,7 +148,7 @@ def transcode():
         "job_id": job.id,
         "status": job.status,
         "media_id": media_id,
-        "profile": profile_name,
+        "preset": preset_name,
     })
 
 @api_bp.route("/jobs", methods=["GET"])
@@ -157,7 +161,7 @@ def list_jobs():
             {
                 "id": job.id,
                 "media_id": job.media_id,
-                "profile": job.profile_name,
+                "preset": job.preset_name,
                 "status": job.status,
                 "progress": job.progress,
                 "output_path": job.output_path,
@@ -179,7 +183,7 @@ def get_job_status(job_id):
     return jsonify({
         "id": job.id,
         "media_id": job.media_id,
-        "profile": job.profile_name,
+        "preset": job.preset_name,
         "status": job.status,
         "progress": job.progress,
         "output_path": job.output_path,
@@ -303,4 +307,3 @@ def get_media_technical_info(media_id):
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
         
         return jsonify({"error": f"Error getting technical info: {str(e)}"}), 500
-

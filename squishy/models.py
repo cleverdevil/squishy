@@ -130,7 +130,7 @@ class TranscodeJob:
 
     id: str
     media_id: str
-    profile_name: str
+    preset_name: str
     status: str  # "pending", "processing", "completed", "failed", "cancelled"
     progress: float = 0.0
     output_path: Optional[str] = None

@@ -4,25 +4,34 @@ function toggleSourceFields() {
         el.style.display = 'none';
     });
 
+    // Get the selected source
+    var selectedRadio = document.querySelector('input[name="source"]:checked');
+    
+    // If no radio is checked (fresh install), default to jellyfin
+    var selectedSource = selectedRadio ? selectedRadio.value : 'jellyfin';
+    
+    // If no radio is checked, check the jellyfin radio
+    if (!selectedRadio) {
+        var jellyfinRadio = document.querySelector('input[name="source"][value="jellyfin"]');
+        if (jellyfinRadio) {
+            jellyfinRadio.checked = true;
+        }
+    }
+    
     // Show the selected source fields
-    var selectedSource = document.querySelector('input[name="source"]:checked').value;
-    document.getElementById(selectedSource + 'Fields').style.display = 'block';
+    var fieldsElement = document.getElementById(selectedSource + 'Fields');
+    if (fieldsElement) {
+        fieldsElement.style.display = 'block';
+    }
 
     // Update the scan type in the hidden form
-    document.getElementById('scan_type').value = selectedSource;
-}
-
-function toggleHwDeviceField() {
-    const hwAccelSelect = document.getElementById('hw_accel');
-    const hwDeviceGroup = document.getElementById('hw_device_group');
-    
-    // Show device field only for methods that need it
-    if (hwAccelSelect.value === 'nvenc' || hwAccelSelect.value === 'cuda' || hwAccelSelect.value === 'vaapi') {
-        hwDeviceGroup.style.display = 'block';
-    } else {
-        hwDeviceGroup.style.display = 'none';
+    var scanTypeElement = document.getElementById('scan_type');
+    if (scanTypeElement) {
+        scanTypeElement.value = selectedSource;
     }
 }
+
+// Hardware acceleration is now handled via capabilities JSON
 
 function scanMedia() {
     var selectedSource = document.querySelector('input[name="source"]:checked').value;
@@ -84,7 +93,7 @@ function closeFileBrowser() {
 
 function loadDirectoryContents(path) {
     // Make an AJAX request to get directory contents
-    fetch(`/admin/browse?path=${encodeURIComponent(path)}&type=${currentFileType}`)
+    fetch(`/admin/browse_filesystem?path=${encodeURIComponent(path)}&type=${currentFileType}`)
         .then(response => response.json())
         .then(data => {
             if (data.error) {
@@ -253,13 +262,18 @@ function renumberMappings() {
     const pathMappingsContainer = document.getElementById('pathMappings');
     const mappingRows = pathMappingsContainer.querySelectorAll('.path-mapping-row');
     
-    // Skip the first row (which uses source_path and target_path without numbers)
-    for (let i = 1; i < mappingRows.length; i++) {
+    // If no mapping rows, we don't need to do anything
+    if (mappingRows.length === 0) {
+        return;
+    }
+    
+    // Renumber all mapping rows
+    for (let i = 0; i < mappingRows.length; i++) {
         const row = mappingRows[i];
-        const sourceInput = row.querySelector('input[name^="source_path_"]');
-        const targetInput = row.querySelector('input[name^="target_path_"]');
-        const sourceLabel = row.querySelector('label[for^="source_path_"]');
-        const targetLabel = row.querySelector('label[for^="target_path_"]');
+        const sourceInput = row.querySelector('input[name^="source_path"]');
+        const targetInput = row.querySelector('input[name^="target_path"]');
+        const sourceLabel = row.querySelector('label[for^="source_path"]');
+        const targetLabel = row.querySelector('label[for^="target_path"]');
         
         if (sourceInput && targetInput) {
             // Update the input IDs and names
@@ -268,14 +282,22 @@ function renumberMappings() {
             targetInput.id = `target_path_${i}`;
             targetInput.name = `target_path_${i}`;
             
-            // Update the labels
+            // Update the labels - first row doesn't have a number
             if (sourceLabel) {
                 sourceLabel.setAttribute('for', `source_path_${i}`);
-                sourceLabel.textContent = `Media Server Path ${i + 1}`;
+                if (i === 0) {
+                    sourceLabel.textContent = `Media Server Path`;
+                } else {
+                    sourceLabel.textContent = `Media Server Path ${i + 1}`;
+                }
             }
             if (targetLabel) {
                 targetLabel.setAttribute('for', `target_path_${i}`);
-                targetLabel.textContent = `Squishy Path ${i + 1}`;
+                if (i === 0) {
+                    targetLabel.textContent = `Squishy Path`;
+                } else {
+                    targetLabel.textContent = `Squishy Path ${i + 1}`;
+                }
             }
         }
     }
@@ -284,10 +306,7 @@ function renumberMappings() {
 function detectHardwareAcceleration() {
     // Show loading message
     const hwaccelResults = document.getElementById('hwaccel-results');
-    const methodsDiv = document.getElementById('hwaccel-methods');
-    const devicesDiv = document.getElementById('hwaccel-devices');
-    
-    methodsDiv.innerHTML = '<p>Detecting hardware acceleration methods. This may take a few moments...</p>';
+    hwaccelResults.innerHTML = '<p>Detecting hardware acceleration capabilities. This may take a few moments...</p>';
     hwaccelResults.style.display = 'block';
     
     // Make API request to detect hardware acceleration
@@ -303,168 +322,298 @@ function detectHardwareAcceleration() {
             displayHardwareAccelerationResults(data);
         })
         .catch(error => {
-            methodsDiv.innerHTML = `<p class="error">Error detecting hardware acceleration: ${error.message}</p>`;
+            hwaccelResults.innerHTML = `<p class="error">Error detecting hardware acceleration: ${error.message}</p>`;
         });
 }
 
+// Function to set up the edit/save capabilities functionality
+function setupCapabilitiesEditing() {
+    const editCapabilitiesButton = document.getElementById('edit-capabilities-button');
+    const saveCapabilitiesButton = document.getElementById('save-capabilities-button');
+    const capabilitiesTextArea = document.getElementById('capabilities-json-content');
+    
+    if (editCapabilitiesButton && saveCapabilitiesButton && capabilitiesTextArea) {
+        // Edit button handler
+        editCapabilitiesButton.addEventListener('click', function() {
+            if (capabilitiesTextArea.readOnly) {
+                // Enable editing
+                capabilitiesTextArea.readOnly = false;
+                editCapabilitiesButton.textContent = 'Disable Editing';
+                capabilitiesTextArea.style.border = '2px solid #e74c3c';
+                capabilitiesTextArea.style.backgroundColor = '#fff9f9';
+                saveCapabilitiesButton.style.display = 'inline-block';
+            } else {
+                // Disable editing
+                capabilitiesTextArea.readOnly = true;
+                editCapabilitiesButton.textContent = 'Enable Editing';
+                capabilitiesTextArea.style.border = '';
+                capabilitiesTextArea.style.backgroundColor = '';
+                saveCapabilitiesButton.style.display = 'none';
+            }
+        });
+        
+        // Save button handler
+        saveCapabilitiesButton.addEventListener('click', function() {
+            try {
+                // Parse the JSON from the textarea
+                const capabilities = JSON.parse(capabilitiesTextArea.value);
+                
+                // Validate the capabilities JSON
+                if (!capabilities || typeof capabilities !== 'object') {
+                    alert('Invalid JSON: Must be an object');
+                    return;
+                }
+                
+                // Check for required fields
+                const requiredFields = ['hwaccel', 'device', 'encoders', 'fallback_encoders'];
+                for (const field of requiredFields) {
+                    if (!(field in capabilities)) {
+                        alert(`Missing required field: ${field}`);
+                        return;
+                    }
+                }
+                
+                // Make API request to save capabilities
+                fetch('/admin/save_hw_capabilities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ capabilities: capabilities }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Hardware capabilities saved successfully!');
+                        
+                        // Update the textarea with the saved capabilities
+                        if (data.capabilities) {
+                            capabilitiesTextArea.value = JSON.stringify(data.capabilities, null, 2);
+                        }
+                        
+                        // Reset UI
+                        capabilitiesTextArea.readOnly = true;
+                        editCapabilitiesButton.textContent = 'Enable Editing';
+                        capabilitiesTextArea.style.border = '';
+                        capabilitiesTextArea.style.backgroundColor = '';
+                        saveCapabilitiesButton.style.display = 'none';
+                    } else {
+                        alert('Error saving capabilities: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    alert('Error saving capabilities: ' + error.message);
+                });
+            } catch (e) {
+                alert('Invalid JSON syntax: ' + e.message);
+            }
+        });
+    }
+}
+
 function displayHardwareAccelerationResults(data) {
-    const methodsDiv = document.getElementById('hwaccel-methods');
-    const devicesDiv = document.getElementById('hwaccel-devices');
-    const hwAccelSelect = document.getElementById('hw_accel');
-    const hwDeviceInput = document.getElementById('hw_device');
+    const hwaccelResults = document.getElementById('hwaccel-results');
     
     // Clear previous results
-    methodsDiv.innerHTML = '';
-    devicesDiv.innerHTML = '';
+    hwaccelResults.innerHTML = '';
+    hwaccelResults.style.display = 'block';
     
-    // Methods
+    // We don't need to do anything with stored capabilities here
+    // as they are already displayed in the template
+    
+    // Create a summary section for detected methods
+    const summarySection = document.createElement('div');
+    summarySection.className = 'hw-summary-section';
+    
+    const summaryHeader = document.createElement('h3');
+    summaryHeader.textContent = 'Detection Summary';
+    summarySection.appendChild(summaryHeader);
+    
+    // Add detected methods
+    const methodsHeader = document.createElement('h4');
+    methodsHeader.textContent = 'Available Hardware Acceleration Methods:';
+    summarySection.appendChild(methodsHeader);
+    
     if (data.methods && data.methods.length > 0) {
         const methodsList = document.createElement('ul');
         data.methods.forEach(method => {
             const li = document.createElement('li');
-            
-            // Create method entry with apply button
-            const methodSpan = document.createElement('span');
-            methodSpan.textContent = method;
-            li.appendChild(methodSpan);
-            
-            // Only add apply button for usable HW acceleration methods
-            if (['nvenc', 'cuda', 'qsv', 'vaapi', 'videotoolbox', 'amf'].includes(method)) {
-                const applyButton = document.createElement('button');
-                applyButton.textContent = 'Use';
-                applyButton.className = 'button small';
-                applyButton.style.marginLeft = '10px';
-                applyButton.addEventListener('click', function() {
-                    // Set the hardware acceleration method
-                    hwAccelSelect.value = method;
-                    
-                    // Trigger change event to update device field visibility
-                    const event = new Event('change');
-                    hwAccelSelect.dispatchEvent(event);
-                });
-                li.appendChild(applyButton);
-            }
-            
+            li.textContent = method;
             methodsList.appendChild(li);
         });
-        methodsDiv.appendChild(methodsList);
+        summarySection.appendChild(methodsList);
     } else {
-        methodsDiv.innerHTML = '<p>No hardware acceleration methods detected.</p>';
+        const noMethodsMsg = document.createElement('p');
+        noMethodsMsg.textContent = 'No hardware acceleration methods detected.';
+        summarySection.appendChild(noMethodsMsg);
     }
     
-    // Devices
-    let hasDevices = false;
+    // Add recommended method if available
+    if (data.recommended && data.recommended.method) {
+        const recommendedDiv = document.createElement('div');
+        recommendedDiv.className = 'recommended-hw';
+        
+        const recommendedHeader = document.createElement('h4');
+        recommendedHeader.textContent = 'Recommended Configuration:';
+        recommendedDiv.appendChild(recommendedHeader);
+        
+        const recommendedInfo = document.createElement('p');
+        recommendedInfo.innerHTML = `<strong>Method:</strong> ${data.recommended.method}`;
+        if (data.recommended.device) {
+            recommendedInfo.innerHTML += `<br><strong>Device:</strong> ${data.recommended.device}`;
+        }
+        recommendedDiv.appendChild(recommendedInfo);
+        
+        summarySection.appendChild(recommendedDiv);
+    }
     
-    if (data.devices) {
-        for (const [type, devices] of Object.entries(data.devices)) {
-            if (devices.length > 0) {
-                hasDevices = true;
-                
-                const deviceHeader = document.createElement('h4');
-                deviceHeader.textContent = type.toUpperCase();
-                devicesDiv.appendChild(deviceHeader);
-                
-                const devicesList = document.createElement('ul');
-                devices.forEach(device => {
-                    const li = document.createElement('li');
-                    
-                    // Display device info with apply button
-                    let deviceText = '';
-                    let deviceValue = '';
-                    
-                    if (device.name && device.index) {
-                        deviceText = `${device.name} (${device.index})`;
-                        deviceValue = device.index;
-                    } else if (device.path) {
-                        deviceText = device.path;
-                        deviceValue = device.path;
+    hwaccelResults.appendChild(summarySection);
+    
+    // Display raw capabilities JSON
+    if (data.capabilities_json) {
+        // Add a save button to store the newly detected capabilities
+        const saveDetectedContainer = document.createElement('div');
+        saveDetectedContainer.className = 'save-detected-container';
+        saveDetectedContainer.style.marginTop = '20px';
+        saveDetectedContainer.style.marginBottom = '20px';
+        
+        const saveDetectedButton = document.createElement('button');
+        saveDetectedButton.textContent = 'Save Detected Capabilities';
+        saveDetectedButton.className = 'button success';
+        saveDetectedButton.addEventListener('click', function() {
+            try {
+                // Make API request to save capabilities
+                fetch('/admin/save_hw_capabilities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ capabilities: data.capabilities_json }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Hardware capabilities saved successfully!');
+                        
+                        // Instead of reloading the page, update the UI
+                        // Create or update the capabilities display in the existing UI
+                        const existingCapabilities = document.querySelector('.capabilities-json');
+                        
+                        if (existingCapabilities) {
+                            // Update existing capabilities display
+                            const capabilitiesTextArea = document.getElementById('capabilities-json-content');
+                            if (capabilitiesTextArea && data.capabilities) {
+                                capabilitiesTextArea.value = JSON.stringify(data.capabilities, null, 2);
+                            }
+                        } else {
+                            // Create new capabilities display
+                            const capabilitiesSection = document.createElement('div');
+                            capabilitiesSection.className = 'capabilities-json';
+                            
+                            const capabilitiesHeader = document.createElement('h3');
+                            capabilitiesHeader.textContent = 'Current Hardware Capabilities';
+                            capabilitiesSection.appendChild(capabilitiesHeader);
+                            
+                            const capabilitiesDescription = document.createElement('p');
+                            capabilitiesDescription.className = 'help-text';
+                            capabilitiesDescription.innerHTML = 'These hardware acceleration capabilities are currently configured in Squishy. <strong>Advanced users only:</strong> You can edit this configuration if you need to make manual adjustments.';
+                            capabilitiesSection.appendChild(capabilitiesDescription);
+                            
+                            const capabilitiesTextArea = document.createElement('textarea');
+                            capabilitiesTextArea.id = 'capabilities-json-content';
+                            capabilitiesTextArea.value = JSON.stringify(data.capabilities, null, 2);
+                            capabilitiesTextArea.readOnly = true;
+                            capabilitiesTextArea.rows = 12;
+                            capabilitiesTextArea.style.width = '100%';
+                            capabilitiesTextArea.style.fontFamily = 'monospace';
+                            capabilitiesTextArea.style.fontSize = '0.9rem';
+                            capabilitiesSection.appendChild(capabilitiesTextArea);
+                            
+                            const actionsDiv = document.createElement('div');
+                            actionsDiv.className = 'capabilities-actions';
+                            actionsDiv.style.marginTop = '15px';
+                            
+                            const editButton = document.createElement('button');
+                            editButton.id = 'edit-capabilities-button';
+                            editButton.className = 'button';
+                            editButton.textContent = 'Enable Editing';
+                            actionsDiv.appendChild(editButton);
+                            
+                            const saveButton = document.createElement('button');
+                            saveButton.id = 'save-capabilities-button';
+                            saveButton.className = 'button success';
+                            saveButton.style.marginLeft = '10px';
+                            saveButton.style.display = 'none';
+                            saveButton.textContent = 'Save Capabilities';
+                            actionsDiv.appendChild(saveButton);
+                            
+                            capabilitiesSection.appendChild(actionsDiv);
+                            
+                            // Replace the save button container with the capabilities section
+                            saveDetectedContainer.replaceWith(capabilitiesSection);
+                            
+                            // Remove other detection results
+                            const detectedCapabilitiesContainer = document.querySelector('.capabilities-json:not(:first-child)');
+                            if (detectedCapabilitiesContainer) {
+                                detectedCapabilitiesContainer.remove();
+                            }
+                            
+                            // Set up the edit/save functionality
+                            setupCapabilitiesEditing();
+                        }
                     } else {
-                        deviceText = JSON.stringify(device);
+                        alert('Error saving capabilities: ' + (data.error || 'Unknown error'));
                     }
-                    
-                    const deviceSpan = document.createElement('span');
-                    deviceSpan.textContent = deviceText;
-                    li.appendChild(deviceSpan);
-                    
-                    // Add apply button for devices that match the acceleration type
-                    if ((type === 'cuda' && hwAccelSelect.value === 'nvenc') || 
-                        (type === hwAccelSelect.value)) {
-                        const applyButton = document.createElement('button');
-                        applyButton.textContent = 'Use';
-                        applyButton.className = 'button small';
-                        applyButton.style.marginLeft = '10px';
-                        applyButton.addEventListener('click', function() {
-                            // Set the device value
-                            hwDeviceInput.value = deviceValue;
-                        });
-                        li.appendChild(applyButton);
-                    }
-                    
-                    devicesList.appendChild(li);
+                })
+                .catch(error => {
+                    alert('Error saving capabilities: ' + error.message);
                 });
-                devicesDiv.appendChild(devicesList);
+            } catch (e) {
+                alert('Error: ' + e.message);
             }
-        }
-    }
-    
-    if (!hasDevices) {
-        devicesDiv.innerHTML = '<p>No hardware acceleration devices detected.</p>';
-    }
-    
-    // Add Apply All button if methods were detected
-    if (data.methods && data.methods.length > 0) {
-        const applyContainer = document.createElement('div');
-        applyContainer.style.marginTop = '20px';
-        applyContainer.style.textAlign = 'right';
+        });
+        saveDetectedContainer.appendChild(saveDetectedButton);
+        hwaccelResults.appendChild(saveDetectedContainer);
         
-        let recommendedMethod = '';
-        let recommendedDevice = '';
+        // Display the detected capabilities
+        const capabilitiesContainer = document.createElement('div');
+        capabilitiesContainer.className = 'capabilities-json';
         
-        // Determine best method to use
-        if (data.methods.includes('nvenc')) {
-            recommendedMethod = 'nvenc';
-            if (data.devices.cuda && data.devices.cuda.length > 0) {
-                recommendedDevice = data.devices.cuda[0].index || '0';
-            }
-        } else if (data.methods.includes('qsv')) {
-            recommendedMethod = 'qsv';
-        } else if (data.methods.includes('vaapi')) {
-            recommendedMethod = 'vaapi';
-            if (data.devices.vaapi && data.devices.vaapi.length > 0) {
-                recommendedDevice = data.devices.vaapi[0].path;
-            }
-        } else if (data.methods.includes('videotoolbox')) {
-            recommendedMethod = 'videotoolbox';
-        } else if (data.methods.includes('amf')) {
-            recommendedMethod = 'amf';
-        }
+        const capabilitiesHeader = document.createElement('h3');
+        capabilitiesHeader.textContent = 'Detected Hardware Capabilities';
+        capabilitiesContainer.appendChild(capabilitiesHeader);
         
-        if (recommendedMethod) {
-            const applyButton = document.createElement('button');
-            applyButton.textContent = 'Apply Recommended Settings';
-            applyButton.className = 'button';
-            applyButton.addEventListener('click', function() {
-                // Set the hardware acceleration method
-                hwAccelSelect.value = recommendedMethod;
-                
-                // Set device if applicable
-                if (recommendedDevice) {
-                    hwDeviceInput.value = recommendedDevice;
-                }
-                
-                // Trigger change event to update device field visibility
-                const event = new Event('change');
-                hwAccelSelect.dispatchEvent(event);
-            });
-            applyContainer.appendChild(applyButton);
-            devicesDiv.appendChild(applyContainer);
-        }
+        const capabilitiesDescription = document.createElement('p');
+        capabilitiesDescription.className = 'help-text';
+        capabilitiesDescription.innerHTML = 'This JSON file defines all hardware acceleration capabilities detected on your system. Click "Save Detected Capabilities" above to use this configuration.';
+        capabilitiesContainer.appendChild(capabilitiesDescription);
+        
+        const capabilitiesTextArea = document.createElement('textarea');
+        capabilitiesTextArea.id = 'detected-capabilities-json';
+        capabilitiesTextArea.value = JSON.stringify(data.capabilities_json, null, 2);
+        capabilitiesTextArea.readOnly = true;
+        capabilitiesTextArea.rows = 12;
+        capabilitiesTextArea.style.width = '100%';
+        capabilitiesTextArea.style.fontFamily = 'monospace';
+        capabilitiesTextArea.style.fontSize = '0.9rem';
+        capabilitiesContainer.appendChild(capabilitiesTextArea);
+        
+        hwaccelResults.appendChild(capabilitiesContainer);
     }
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    toggleSourceFields();
+    // For a fresh install, we need to make sure one of the source fields is shown
+    const sourceRadios = document.querySelectorAll('input[name="source"]');
+    if (sourceRadios.length > 0) {
+        // If none is checked, check the first one by default (jellyfin)
+        const anyChecked = Array.from(sourceRadios).some(radio => radio.checked);
+        if (!anyChecked && sourceRadios[0]) {
+            sourceRadios[0].checked = true;
+        }
+        toggleSourceFields();
+    }
     
     // Load libraries
     loadLibraries();
@@ -505,11 +654,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Set up hardware acceleration UI interactions
-    const hwAccelSelect = document.getElementById('hw_accel');
-    if (hwAccelSelect) {
-        hwAccelSelect.addEventListener('change', toggleHwDeviceField);
-    }
+    // Hardware acceleration is now handled via capabilities JSON
     
     // Set up hardware acceleration detection
     const detectHwAccelButton = document.querySelector('a[href="/admin/detect_hw_accel"]');
@@ -520,27 +665,45 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Set up existing capabilities editing
+    setupCapabilitiesEditing();
+    
     // Path mapping UI functionality
     const addMappingButton = document.getElementById('addMapping');
     if (addMappingButton) {
         addMappingButton.addEventListener('click', function() {
             const pathMappingsContainer = document.getElementById('pathMappings');
+            
+            // Remove empty state message if it exists
+            const emptyState = pathMappingsContainer.querySelector('.path-mapping-empty');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
             const existingMappings = pathMappingsContainer.querySelectorAll('.path-mapping-row');
             const nextIndex = existingMappings.length;
             
             const newMapping = document.createElement('div');
             newMapping.className = 'path-mapping-row';
+            
+            // If this is the first mapping (index 0), don't include a number in the label
+            const labelNumber = nextIndex === 0 ? '' : ` ${nextIndex + 1}`;
+            
             newMapping.innerHTML = `
-                <div class="form-group">
-                    <label for="source_path_${nextIndex}">Media Server Path ${nextIndex + 1}</label>
-                    <div class="input-with-button">
-                        <input type="text" id="source_path_${nextIndex}" name="source_path_${nextIndex}" placeholder="/another/path">
-                        <button type="button" class="remove-mapping button danger small">Remove</button>
+                <div class="mapping-fields">
+                    <div class="form-group">
+                        <label for="source_path_${nextIndex}">Media Server Path${labelNumber}</label>
+                        <input type="text" id="source_path_${nextIndex}" name="source_path_${nextIndex}" placeholder="/media">
+                    </div>
+                    <div class="form-group">
+                        <label for="target_path_${nextIndex}">Squishy Path${labelNumber}</label>
+                        <input type="text" id="target_path_${nextIndex}" name="target_path_${nextIndex}" placeholder="/opt/media">
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="target_path_${nextIndex}">Squishy Path ${nextIndex + 1}</label>
-                    <input type="text" id="target_path_${nextIndex}" name="target_path_${nextIndex}" placeholder="/local/path">
+                <div class="mapping-actions">
+                    <button type="button" class="remove-mapping circle-button cancel-button" data-tooltip="Remove">
+                        <img src="/static/img/cancel.svg" alt="Remove" width="24" height="24">
+                    </button>
                 </div>
             `;
             
@@ -553,6 +716,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     newMapping.remove();
                     // Re-number the remaining mappings
                     renumberMappings();
+                    
+                    // If no mappings left, show the empty state message
+                    if (pathMappingsContainer.querySelectorAll('.path-mapping-row').length === 0) {
+                        const emptyStateDiv = document.createElement('div');
+                        emptyStateDiv.className = 'path-mapping-empty';
+                        emptyStateDiv.innerHTML = '<p>No path mappings configured. Click "Add Mapping" below to create your first mapping.</p>';
+                        pathMappingsContainer.appendChild(emptyStateDiv);
+                    }
                 });
             }
         });
@@ -562,9 +733,19 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.remove-mapping').forEach(button => {
         button.addEventListener('click', function() {
             const mappingRow = this.closest('.path-mapping-row');
+            const pathMappingsContainer = document.getElementById('pathMappings');
+            
             if (mappingRow) {
                 mappingRow.remove();
                 renumberMappings();
+                
+                // If no mappings left, show the empty state message
+                if (pathMappingsContainer.querySelectorAll('.path-mapping-row').length === 0) {
+                    const emptyStateDiv = document.createElement('div');
+                    emptyStateDiv.className = 'path-mapping-empty';
+                    emptyStateDiv.innerHTML = '<p>No path mappings configured. Click "Add Mapping" below to create your first mapping.</p>';
+                    pathMappingsContainer.appendChild(emptyStateDiv);
+                }
             }
         });
     });

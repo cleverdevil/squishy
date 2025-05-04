@@ -26,8 +26,8 @@
                 {% else %}
                 <div class="no-poster">No Poster</div>
                 {% endif %}
-                <!-- Add profile pill as overlay in top left corner -->
-                <div class="profile-pill-overlay">{{ transcode.profile_name }}</div>
+                <!-- Add preset pill as overlay in top left corner -->
+                <div class="preset-pill-overlay">{{ transcode.preset_name }}</div>
             </div>
             <div class="transcode-details">
                 <div class="transcode-content">
@@ -35,6 +35,9 @@
                         {% if transcode.type == "movie" %}
                         {{ transcode.title }} {% if transcode.year %}({{ transcode.year }}){% endif %}
                         {% elif transcode.type == "episode" %}
+                        {% if transcode.show_title %}
+                        <div class="show-title">{{ transcode.show_title }}</div>
+                        {% endif %}
                         {{ transcode.title }}
                         <div class="episode-info">
                             {% if transcode.season_number and transcode.episode_number %}

@@ -20,13 +20,13 @@
                 <div class="form-group">
                     <label>Select Media Source:</label>
                     <div class="radio-group">
-                        <label><input type="radio" name="source" value="jellyfin" {% if config.jellyfin_url or not config.plex_url %}checked{% endif %} required onclick="toggleSourceFields()"> Jellyfin</label>
+                        <label><input type="radio" name="source" value="jellyfin" {% if not config.plex_url or config.jellyfin_url or not config %}checked{% endif %} required onclick="toggleSourceFields()"> Jellyfin</label>
                         <label><input type="radio" name="source" value="plex" {% if config.plex_url %}checked{% endif %} onclick="toggleSourceFields()"> Plex</label>
                     </div>
                     <p class="help-text">Squishy requires either a Jellyfin or Plex connection to function.</p>
                 </div>
 
-                <div id="jellyfinFields" class="source-fields" {% if not config.jellyfin_url %}style="display:none"{% endif %}>
+                <div id="jellyfinFields" class="source-fields" {% if config.plex_url and not config.jellyfin_url %}style="display:none"{% endif %}>
                     <div class="form-group">
                         <label for="jellyfin_url">Jellyfin URL</label>
                         <input type="text" id="jellyfin_url" name="jellyfin_url" value="{{ config.jellyfin_url or '' }}" placeholder="http://jellyfin:8096">
@@ -94,7 +94,7 @@
     <div class="admin-section" id="path-config">
         <h2>Path Configuration</h2>
         <div class="card">
-            <form action="{{ url_for('admin.update_paths_and_mapping') }}" method="post">
+            <form action="{{ url_for('admin.update_paths_and_hw') }}" method="post">
                 <div class="form-group">
                     <label for="media_path">Media Path</label>
                     <p class="help-text">The directory where your media files are stored.</p>
@@ -123,6 +123,15 @@
                 </div>
                 
                 <div class="form-group">
+                    <label for="ffprobe_path">FFprobe Path</label>
+                    <p class="help-text">Path to the FFprobe executable. This is required for media analysis.</p>
+                    <div class="input-with-button">
+                        <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ config.ffprobe_path or '' }}" class="full-width">
+                        <button type="button" class="browse-button" onclick="openFileBrowser('ffprobe_path')">Browse</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
                     <label for="max_concurrent_jobs">Max Concurrent Jobs</label>
                     <input type="number" id="max_concurrent_jobs" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}" min="1" max="10">
                     <p class="help-text">Maximum number of transcoding jobs that can run simultaneously. Additional jobs will be queued.</p>
@@ -133,38 +142,36 @@
                 <p class="help-text">Path mappings help resolve path differences between media servers and Squishy. For example, if your media server reports paths as "/media/Movies" but Squishy accesses them at "/opt/Media/Movies", you would map "/media" to "/opt/Media". You can add multiple mappings for different libraries.</p>
 
                 <div id="pathMappings">
-                    <!-- First (possibly existing) mapping -->
-                    <div class="path-mapping-row">
-                        <div class="form-group">
-                            <label for="source_path">Media Server Path</label>
-                            <div class="input-with-button">
-                                <input type="text" id="source_path" name="source_path" value="{% if config.path_mappings and config.path_mappings.keys()|list %}{{ config.path_mappings.keys()|list|first }}{% else %}{% endif %}" placeholder="/media">
-                                {% if config.path_mappings and config.path_mappings.keys()|list|length > 1 %}
-                                <button type="button" class="remove-mapping button danger small">Remove</button>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="target_path">Squishy Path</label>
-                            <input type="text" id="target_path" name="target_path" value="{% if config.path_mappings and config.path_mappings.values()|list %}{{ config.path_mappings.values()|list|first }}{% else %}{% endif %}" placeholder="/opt/media">
-                        </div>
-                    </div>
-                    
-                    <!-- Additional mappings -->
+                    <!-- Display all existing mappings -->
                     {% set mapping_keys = config.path_mappings.keys()|list if config.path_mappings else [] %}
                     {% set mapping_values = config.path_mappings.values()|list if config.path_mappings else [] %}
-                    {% for i in range(1, mapping_keys|length) %}
-                    <div class="path-mapping-row">
-                        <div class="form-group">
-                            <label for="source_path_{{ loop.index }}">Media Server Path {{ loop.index + 1 }}</label>
-                            <input type="text" id="source_path_{{ loop.index }}" name="source_path_{{ loop.index }}" value="{{ mapping_keys[i] }}" placeholder="/another/path">
+                    
+                    {% if mapping_keys|length > 0 %}
+                        {% for i in range(0, mapping_keys|length) %}
+                        <div class="path-mapping-row">
+                            <div class="mapping-fields">
+                                <div class="form-group">
+                                    <label for="source_path_{{ i }}">Media Server Path {% if i > 0 %}{{ i + 1 }}{% endif %}</label>
+                                    <input type="text" id="source_path_{{ i }}" name="source_path_{{ i }}" value="{{ mapping_keys[i] }}" placeholder="/media">
+                                </div>
+                                <div class="form-group">
+                                    <label for="target_path_{{ i }}">Squishy Path {% if i > 0 %}{{ i + 1 }}{% endif %}</label>
+                                    <input type="text" id="target_path_{{ i }}" name="target_path_{{ i }}" value="{{ mapping_values[i] }}" placeholder="/opt/media">
+                                </div>
+                            </div>
+                            <div class="mapping-actions">
+                                <button type="button" class="remove-mapping circle-button cancel-button" data-tooltip="Remove">
+                                    <img src="/static/img/cancel.svg" alt="Remove" width="24" height="24">
+                                </button>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="target_path_{{ loop.index }}">Squishy Path {{ loop.index + 1 }}</label>
-                            <input type="text" id="target_path_{{ loop.index }}" name="target_path_{{ loop.index }}" value="{{ mapping_values[i] }}" placeholder="/local/path">
+                        {% endfor %}
+                    {% else %}
+                        <!-- Show an empty state message if no mappings exist -->
+                        <div class="path-mapping-empty">
+                            <p>No path mappings configured. Click "Add Mapping" below to create your first mapping.</p>
                         </div>
-                    </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
                 
                 <div class="form-group">
@@ -205,12 +212,12 @@
 </form>
 
     <div class="admin-section">
-        <h2>Transcoding Profiles</h2>
+        <h2>Transcoding Presets</h2>
         <div class="card">
-            <h3>Profile Management</h3>
-            <p>Manage your transcoding profiles for different quality settings.</p>
+            <h3>Preset Management</h3>
+            <p>Manage your transcoding presets for different quality settings.</p>
             <div class="form-submit">
-                <a href="{{ url_for('admin.list_profiles') }}" class="button">Manage Profiles</a>
+                <a href="{{ url_for('admin.list_presets') }}" class="button">Manage Presets</a>
             </div>
         </div>
     </div>
@@ -244,59 +251,39 @@
     <div class="admin-section">
         <h2>Hardware Acceleration</h2>
         <div class="card">
-            <h3>Global Hardware Acceleration Settings</h3>
-            <p class="help-text">These settings will be used by default for all transcoding profiles unless overridden in individual profiles.</p>
-            
-            <form action="{{ url_for('admin.update_paths_and_mapping') }}" method="post">
-                <!-- Hidden fields to maintain other settings -->
-                <input type="hidden" name="media_path" value="{{ config.media_path }}">
-                <input type="hidden" name="transcode_path" value="{{ config.transcode_path }}">
-                <input type="hidden" name="ffmpeg_path" value="{{ config.ffmpeg_path }}">
-                <input type="hidden" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}">
-                {% if config.path_mappings and config.path_mappings.keys()|list %}
-                <input type="hidden" name="source_path" value="{{ config.path_mappings.keys()|list|first }}">
-                {% endif %}
-                {% if config.path_mappings and config.path_mappings.values()|list %}
-                <input type="hidden" name="target_path" value="{{ config.path_mappings.values()|list|first }}">
-                {% endif %}
-                
-                <div class="form-group">
-                    <label for="hw_accel">Hardware Acceleration Method</label>
-                    <select id="hw_accel" name="hw_accel">
-                        <option value="" {% if not config.hw_accel %}selected{% endif %}>None (Software Encoding)</option>
-                        <option value="nvenc" {% if config.hw_accel == "nvenc" %}selected{% endif %}>NVIDIA NVENC</option>
-                        <option value="qsv" {% if config.hw_accel == "qsv" %}selected{% endif %}>Intel QuickSync (QSV)</option>
-                        <option value="vaapi" {% if config.hw_accel == "vaapi" %}selected{% endif %}>VAAPI (Intel/AMD GPU)</option>
-                        <option value="videotoolbox" {% if config.hw_accel == "videotoolbox" %}selected{% endif %}>VideoToolbox (macOS)</option>
-                        <option value="amf" {% if config.hw_accel == "amf" %}selected{% endif %}>AMD AMF</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" id="hw_device_group" {% if config.hw_accel not in ["nvenc", "cuda", "vaapi"] %}style="display:none"{% endif %}>
-                    <label for="hw_device">Hardware Device</label>
-                    <input type="text" id="hw_device" name="hw_device" value="{{ config.hw_device or '' }}" placeholder="e.g. /dev/dri/renderD128 or 0">
-                    <p class="help-text">For CUDA/NVENC: GPU index (e.g. "0"). For VAAPI: device path (e.g. "/dev/dri/renderD128").</p>
-                </div>
-                
-                <div class="form-submit">
-                    <button type="submit" class="button">Save Hardware Settings</button>
-                </div>
-            </form>
-            
-            <hr>
-            
             <h3>Hardware Detection</h3>
-            <p>Detect your system's hardware acceleration capabilities to optimize transcoding performance.</p>
+            <p class="help-text">
+                Detect hardware acceleration capabilities for your system. 
+                The settings will be saved as a JSON configuration file that defines all available 
+                hardware encoders and their capabilities.
+            </p>
+            <p class="help-text advanced-note">
+                <strong>Note:</strong> This is an advanced feature. The detected capabilities can be edited
+                manually by experts who need to customize the hardware acceleration settings. This JSON is used
+                directly by the effeffmpeg transcoding engine and overrides all other hardware settings.
+            </p>
+            
             <div class="form-submit">
-                <a href="{{ url_for('admin.detect_hw_accel_route') }}" class="button">Detect Hardware Acceleration</a>
+                <a href="{{ url_for('admin.detect_hw_accel_route') }}" class="button">Detect Hardware Capabilities</a>
             </div>
             
-            <div id="hwaccel-results" style="display:none; margin-top: 20px;">
-                <h3>Detected Hardware Acceleration Methods</h3>
-                <div id="hwaccel-methods"></div>
-                
-                <h3>Available Devices</h3>
-                <div id="hwaccel-devices"></div>
+            <div id="hwaccel-results" style="margin-top: 20px;">
+                {% if capabilities_json %}
+                <div class="capabilities-json">
+                    <h3>Current Hardware Capabilities</h3>
+                    <p class="help-text">These hardware acceleration capabilities are currently configured in Squishy. <strong>Advanced users only:</strong> You can edit this configuration if you need to make manual adjustments.</p>
+                    
+                    <textarea id="capabilities-json-content" rows="12" style="width: 100%; font-family: monospace; font-size: 0.9rem;" readonly>{{ capabilities_json | tojson(indent=2) }}</textarea>
+                    
+                    <div class="capabilities-actions" style="margin-top: 15px;">
+                        <button type="button" id="edit-capabilities-button" class="button">Enable Editing</button>
+                        <button type="button" id="save-capabilities-button" class="button success" style="margin-left: 10px; display: none;">Save Capabilities</button>
+                    </div>
+                </div>
+                {% else %}
+                <!-- This div is initially empty and will be populated by JavaScript when hardware is detected -->
+                <div style="display: none;"></div>
+                {% endif %}
             </div>
         </div>
     </div>

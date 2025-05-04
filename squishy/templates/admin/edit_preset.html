@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Transcoding Preset - Squishy{% endblock %}
+
+{% block head %}
+<style>
+    .quality-settings {
+        margin-bottom: 1rem;
+    }
+    .quality-toggle {
+        margin-bottom: 1rem;
+    }
+    .toggle-container {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    .toggle-option {
+        padding: 0.5rem 1rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .toggle-option.active {
+        background-color: #2980b9;
+        color: white;
+        border-color: #2980b9;
+    }
+    .quality-option {
+        display: none;
+    }
+    .quality-option.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quality settings toggle
+    const crfOption = document.getElementById('crf-option');
+    const bitrateOption = document.getElementById('bitrate-option');
+    const crfSettings = document.getElementById('crf-settings');
+    const bitrateSettings = document.getElementById('bitrate-settings');
+    const usecrfInput = document.getElementById('use_crf');
+    
+    crfOption.addEventListener('click', function() {
+        crfOption.classList.add('active');
+        bitrateOption.classList.remove('active');
+        crfSettings.classList.add('active');
+        bitrateSettings.classList.remove('active');
+        usecrfInput.value = 'true';
+    });
+    
+    bitrateOption.addEventListener('click', function() {
+        bitrateOption.classList.add('active');
+        crfOption.classList.remove('active');
+        bitrateSettings.classList.add('active');
+        crfSettings.classList.remove('active');
+        usecrfInput.value = 'false';
+    });
+    
+    // Initialize the toggle state
+    if (usecrfInput.value === 'true') {
+        crfOption.click();
+    } else {
+        bitrateOption.click();
+    }
+    
+    // Update container options based on codec
+    const codecSelect = document.getElementById('codec');
+    const containerSelect = document.getElementById('container');
+    
+    codecSelect.addEventListener('change', function() {
+        const codec = this.value;
+        // Reset container options
+        containerSelect.innerHTML = '';
+        
+        // Basic options for all codecs
+        addOption(containerSelect, '.mp4', 'MP4');
+        addOption(containerSelect, '.mkv', 'MKV');
+        
+        // Codec-specific options
+        if (codec === 'vp9' || codec === 'av1') {
+            addOption(containerSelect, '.webm', 'WebM');
+        }
+        
+        // Set default container based on codec
+        if (codec === 'vp9' || codec === 'av1') {
+            containerSelect.value = '.webm';
+        } else if (codec === 'h264') {
+            containerSelect.value = '.mp4';
+        } else {
+            containerSelect.value = '.mkv';
+        }
+    });
+    
+    function addOption(selectElement, value, text) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        selectElement.appendChild(option);
+    }
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="back-button-container">
+    <a href="{{ url_for('admin.list_presets') }}" class="button back-button">← Back to Presets</a>
+</div>
+
+<div class="section-header">
+    <h1>Edit Transcoding Preset: {{ name }}</h1>
+</div>
+
+<div class="card">
+    <form action="{{ url_for('admin.edit_preset', name=name) }}" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="codec">Video Codec</label>
+                <select id="codec" name="codec" required>
+                    {% for codec in codecs %}
+                    <option value="{{ codec.value }}" {% if preset.get('codec') == codec.value %}selected{% endif %}>{{ codec.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="scale">Resolution Scale</label>
+                <select id="scale" name="scale" required>
+                    {% for scale in scales %}
+                    <option value="{{ scale.value }}" {% if preset.get('scale') == scale.value %}selected{% endif %}>{{ scale.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="container">Container Format</label>
+                <select id="container" name="container" required>
+                    {% for container in containers %}
+                    <option value="{{ container.value }}" {% if preset.get('container') == container.value %}selected{% endif %}>{{ container.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group quality-settings">
+            <label>Quality Settings</label>
+            <input type="hidden" id="use_crf" name="use_crf" value="{{ 'true' if use_crf else 'false' }}">
+            
+            <div class="toggle-container quality-toggle">
+                <div id="crf-option" class="toggle-option {% if use_crf %}active{% endif %}">Constant Rate Factor (CRF)</div>
+                <div id="bitrate-option" class="toggle-option {% if not use_crf %}active{% endif %}">Target Bitrate</div>
+            </div>
+            
+            <div id="crf-settings" class="quality-option {% if use_crf %}active{% endif %}">
+                <div class="form-group">
+                    <label for="crf">CRF Value</label>
+                    <input type="range" id="crf" name="crf" min="17" max="30" value="{{ preset.get('crf', 22) }}" oninput="crfValue.value = crf.value">
+                    <output id="crfValue">{{ preset.get('crf', 22) }}</output>
+                    <p class="help-text">Lower values = higher quality (17-23 are visually lossless). Default: 22</p>
+                </div>
+            </div>
+            
+            <div id="bitrate-settings" class="quality-option {% if not use_crf %}active{% endif %}">
+                <div class="form-group">
+                    <label for="bitrate">Target Bitrate</label>
+                    <input type="text" id="bitrate" name="bitrate" value="{{ preset.get('bitrate', '') }}" placeholder="e.g., 4M, 2500k">
+                    <p class="help-text">Higher values = higher quality. Examples: 4M (4 Mbps), 2500k (2.5 Mbps)</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="audio_codec">Audio Codec</label>
+                <select id="audio_codec" name="audio_codec">
+                    {% for codec in audio_codecs %}
+                    <option value="{{ codec.value }}" {% if preset.get('audio_codec') == codec.value %}selected{% endif %}>{{ codec.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="audio_bitrate">Audio Bitrate</label>
+                <select id="audio_bitrate" name="audio_bitrate">
+                    {% for bitrate in audio_bitrates %}
+                    <option value="{{ bitrate.value }}" {% if preset.get('audio_bitrate') == bitrate.value %}selected{% endif %}>{{ bitrate.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Hardware Acceleration</label>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="force_software" name="force_software" {% if preset.get('force_software', False) %}checked{% endif %}>
+                    Force software encoding (disable hardware acceleration)
+                </label>
+            </div>
+            <p class="help-text">If unchecked, hardware acceleration will be used when available.</p>
+        </div>
+        
+        <div class="form-group">
+            <label>Fallback Behavior</label>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="allow_fallback" name="allow_fallback" {% if preset.get('allow_fallback', True) %}checked{% endif %}>
+                    Allow fallback to software encoding if hardware acceleration fails
+                </label>
+            </div>
+            <p class="help-text">Recommended to leave checked for better reliability.</p>
+        </div>
+        
+        <div class="form-submit">
+            <button type="submit" class="button">Update Preset</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

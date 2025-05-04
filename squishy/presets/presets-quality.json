@@ -1,0 +1,139 @@
+{
+  "presets": {
+    "360p-low": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "64k",
+      "crf": 28,
+      "allow_fallback": true
+    },
+    "360p-medium": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "crf": 24,
+      "allow_fallback": true
+    },
+    "360p-high": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "crf": 20,
+      "allow_fallback": true
+    },
+    "480p-low": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "64k",
+      "crf": 28,
+      "allow_fallback": true
+    },
+    "480p-medium": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "crf": 24,
+      "allow_fallback": true
+    },
+    "480p-high": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "crf": 20,
+      "allow_fallback": true
+    },
+    "720p-low": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "crf": 28,
+      "allow_fallback": true
+    },
+    "720p-medium": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "crf": 24,
+      "allow_fallback": true
+    },
+    "720p-high": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "crf": 20,
+      "allow_fallback": true
+    },
+    "1080p-low": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "crf": 28,
+      "allow_fallback": true
+    },
+    "1080p-medium": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "crf": 24,
+      "allow_fallback": true
+    },
+    "1080p-high": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "crf": 20,
+      "allow_fallback": true
+    },
+    "2160p-low": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "crf": 28,
+      "allow_fallback": true
+    },
+    "2160p-medium": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "crf": 24,
+      "allow_fallback": true
+    },
+    "2160p-high": {
+      "container": ".mkv",
+      "codec": "hevc",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "256k",
+      "crf": 18,
+      "allow_fallback": true
+    }
+  }
+}

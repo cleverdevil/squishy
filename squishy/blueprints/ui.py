@@ -48,7 +48,7 @@ def media_detail(media_id):
     return render_template(
         "ui/media_detail.html",
         media=media_item,
-        profiles=config.profiles,
+        profiles=config.presets,
     )
 
 
@@ -88,7 +88,7 @@ def show_detail(show_id):
     return render_template(
         "ui/show_detail.html",
         show=show,
-        profiles=config.profiles,
+        profiles=config.presets,
         episode_count=episode_count,
         valid_episode_ids=valid_episode_ids,
     )
@@ -97,7 +97,7 @@ def show_detail(show_id):
 @ui_bp.route("/transcode/<media_id>", methods=["POST"])
 def transcode(media_id):
     """Start a transcoding job."""
-    profile_name = request.form["profile"]
+    preset_name = request.form["preset_name"]
 
     media_item = get_media(media_id)
     if media_item is None:
@@ -105,22 +105,22 @@ def transcode(media_id):
         return redirect(url_for("ui.index"))
 
     config = load_config()
-    if profile_name not in config.profiles:
-        flash("Invalid profile")
+    if preset_name not in config.presets:
+        flash("Invalid preset")
         if media_item.type == "movie":
             return redirect(url_for("ui.media_detail", media_id=media_id))
         else:  # episode
             return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
 
-    job = create_job(media_item, profile_name)
+    job = create_job(media_item, preset_name)
     start_transcode(
         job,
         media_item,
-        config.profiles[profile_name],
+        preset_name,
         current_app.config["TRANSCODE_PATH"],
     )
 
-    flash(f"Transcoding job started with profile: {profile_name}")
+    flash(f"Transcoding job started with preset: {preset_name}")
 
     # Return to the appropriate page
     if media_item.type == "movie":

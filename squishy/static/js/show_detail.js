@@ -7,10 +7,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const episodeId = this.getAttribute('data-episode-id');
             const episodePath = this.getAttribute('data-path');
             
-            // Show modal
+            // Show modal with proper centering
             const modal = document.getElementById('techInfoModal');
             modal.classList.remove('hidden');
-            modal.style.display = 'flex';
+            modal.style.display = 'flex';  // Display as flex for centering
             
             // Show loading, hide content
             const loadingContainer = modal.querySelector('.loading-container');
@@ -62,10 +62,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const episodeId = this.getAttribute('data-episode-id');
             const episodeTitle = this.getAttribute('data-episode-title');
             
-            // Show modal
+            // Show modal with proper centering
             const modal = document.getElementById('squishModal');
             modal.classList.remove('hidden');
-            modal.style.display = 'flex';
+            modal.style.display = 'flex';  // Display as flex for centering
             
             // Update form action
             const form = document.getElementById('squishForm');
@@ -113,8 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show notification
             if (typeof showNotification === 'function') {
-                const profileName = this.querySelector('select').options[this.querySelector('select').selectedIndex].text;
-                showNotification(`Starting transcoding with profile: ${profileName}`, 'info');
+                const presetName = this.querySelector('select').options[this.querySelector('select').selectedIndex].text;
+                showNotification(`Starting transcoding with preset: ${presetName}`, 'info');
             }
         });
     }

@@ -8,13 +8,14 @@ import subprocess
 import re
 import json
 import datetime
-import select
 import signal
+import time
 from typing import Dict, Optional, List, Callable, Any
 
-from squishy.config import TranscodeProfile, load_config
+from squishy.config import load_config
 from squishy.models import TranscodeJob, MediaItem, Movie, Episode
 from squishy.scanner import get_media
+from squishy.effeffmpeg import transcode as effeff_transcode, detect_capabilities, TranscodeProcess
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -32,16 +33,16 @@ RUNNING_JOBS = set()
 RUNNING_JOBS_LOCK = threading.RLock()
 
 
-def create_job(media_item: MediaItem, profile_name: str) -> TranscodeJob:
+def create_job(media_item: MediaItem, preset_name: str) -> TranscodeJob:
     """Create a new transcoding job."""
     logger.debug(
-        f"Creating transcoding job for media_id={media_item.id} with profile={profile_name}"
+        f"Creating transcoding job for media_id={media_item.id} with preset={preset_name}"
     )
     job_id = str(uuid.uuid4())
     job = TranscodeJob(
         id=job_id,
         media_id=media_item.id,
-        profile_name=profile_name,
+        preset_name=preset_name,
         status="pending",
     )
     with JOBS_LOCK:
@@ -111,13 +112,13 @@ def process_job_queue():
         for job_data in jobs_to_process:
             job_id = job_data["job_id"]
             media_item = job_data["media_item"]
-            profile = job_data["profile"]
+            preset_name = job_data["preset_name"]
             output_dir = job_data["output_dir"]
 
             job = get_job(job_id)
             if job and job.status == "pending":
                 # Start the job
-                _start_transcode_job(job, media_item, profile, output_dir)
+                _start_transcode_job(job, media_item, preset_name, output_dir)
                 logger.debug(
                     f"Started queued job {job_id}, jobs remaining in queue"
                 )
@@ -128,7 +129,7 @@ def process_job_queue():
                 )
 
     # If we still have available slots and there are pending jobs not in the queue,
-    # we need to find the media items and profiles to start them
+    # we need to find the media items and presets to start them
     if available_slots > 0 and pending_jobs:
         logger.debug(
             f"Looking for pending jobs not in the queue: available_slots={available_slots}, pending_jobs={len(pending_jobs)}"
@@ -144,7 +145,7 @@ def process_job_queue():
             if job.id in queued_job_ids:
                 continue
 
-            # Get the media item and profile
+            # Get the media item and preset
             config = load_config()
 
             media_item = get_media(job.media_id)
@@ -154,17 +155,17 @@ def process_job_queue():
                 )
                 continue
 
-            if job.profile_name not in config.profiles:
+            preset_name = job.preset_name
+            if preset_name not in config.presets:
                 logger.warning(
-                    f"Profile {job.profile_name} for pending job {job.id} not found"
+                    f"Preset {preset_name} for pending job {job.id} not found"
                 )
                 continue
 
-            profile = config.profiles[job.profile_name]
             output_dir = config.transcode_path
 
             # Start the job
-            _start_transcode_job(job, media_item, profile, output_dir)
+            _start_transcode_job(job, media_item, preset_name, output_dir)
             logger.debug(f"Started pending job {job.id} that was not in queue")
 
             available_slots -= 1
@@ -173,18 +174,24 @@ def process_job_queue():
 
 
 def start_transcode(
-    job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str
+    job: TranscodeJob, media_item: MediaItem, preset_name: str, output_dir: str
 ):
     """Start or queue a transcoding job based on concurrency limits."""
     logger.debug(
-        f"Starting transcode job={job.id} for media={media_item.id}, profile={profile.name}"
+        f"Starting transcode job={job.id} for media={media_item.id}, preset={preset_name}"
     )
-    logger.debug(
-        f"Profile settings: resolution={profile.resolution}, codec={profile.codec}, "
-        f"container={profile.container}, quality={profile.quality}, bitrate={profile.bitrate}"
-    )
-
+    
     config = load_config()
+    
+    if preset_name in config.presets:
+        preset = config.presets[preset_name]
+        logger.debug(
+            f"Preset settings: scale={preset.get('scale')}, codec={preset.get('codec')}, "
+            f"container={preset.get('container')}, crf={preset.get('crf')}, bitrate={preset.get('bitrate')}"
+        )
+    else:
+        logger.warning(f"Preset {preset_name} not found in configuration")
+
     max_jobs = config.max_concurrent_jobs
 
     # Check if we can start the job immediately
@@ -192,7 +199,7 @@ def start_transcode(
 
     if current_running < max_jobs:
         # Start the job immediately
-        _start_transcode_job(job, media_item, profile, output_dir)
+        _start_transcode_job(job, media_item, preset_name, output_dir)
         logger.debug(f"Started job {job.id} immediately")
     else:
         # Queue the job with thread safety
@@ -201,7 +208,7 @@ def start_transcode(
                 {
                     "job_id": job.id,
                     "media_item": media_item,
-                    "profile": profile,
+                    "preset_name": preset_name,
                     "output_dir": output_dir,
                 }
             )
@@ -211,7 +218,7 @@ def start_transcode(
 
 
 def _start_transcode_job(
-    job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str
+    job: TranscodeJob, media_item: MediaItem, preset_name: str, output_dir: str
 ):
     """Internal function to start a transcoding job."""
     # Add to running jobs set with thread safety
@@ -231,7 +238,7 @@ def _start_transcode_job(
     # Start the job in a thread
     threading.Thread(
         target=transcode_thread,
-        args=(job, media_item, profile, output_dir, job_finished_callback),
+        args=(job, media_item, preset_name, output_dir, job_finished_callback),
         daemon=True,
     ).start()
 
@@ -241,7 +248,7 @@ def _start_transcode_job(
 def transcode_thread(
     job: TranscodeJob,
     media_item: MediaItem,
-    profile: TranscodeProfile,
+    preset_name: str,
     output_dir: str,
     callback: Optional[Callable] = None,
 ):
@@ -260,7 +267,7 @@ def transcode_thread(
             }
         )
 
-        transcode(job, media_item, profile, output_dir)
+        transcode(job, media_item, preset_name, output_dir)
 
         # Emit final job state
         emit_job_update(
@@ -279,625 +286,33 @@ def transcode_thread(
             callback()
 
 
-def build_ffmpeg_command(
-    ffmpeg_path: str,
-    input_path: str,
-    output_path: str,
-    width: int,
-    height: int,
-    profile: TranscodeProfile,
-    hw_accel: str = None,
-    hw_device: str = None,
-    use_hw_scaling: bool = True,
-):
-    """Build FFmpeg command with appropriate settings."""
-    cmd = [ffmpeg_path]
-
-    # Add hardware acceleration options if available
-    if hw_accel:
-        logger.debug(f"Using hardware acceleration: {hw_accel}")
-
-        if hw_accel in ["cuda", "nvenc"]:
-            cmd.extend(["-hwaccel", "cuda"])
-            if hw_device:
-                cmd.extend(["-hwaccel_device", hw_device])
-        elif hw_accel == "vaapi":
-            cmd.extend(["-hwaccel", "vaapi"])
-            if hw_device:
-                cmd.extend(["-vaapi_device", hw_device])
-            else:
-                cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
-
-            # Add hwaccel output format before input for VAAPI
-            cmd.extend(["-hwaccel_output_format", "vaapi"])
-        elif hw_accel == "videotoolbox":
-            cmd.extend(["-hwaccel", "videotoolbox"])
-        elif hw_accel == "amf":
-            cmd.extend(["-hwaccel", "amf"])
-        else:
-            # QSV and other non-working methods fall back to VAAPI on this system
-            logger.warning(
-                f"Hardware acceleration method {hw_accel} may not be compatible, trying VAAPI instead"
-            )
-            cmd.extend(["-hwaccel", "vaapi"])
-            cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
-            cmd.extend(["-hwaccel_output_format", "vaapi"])
-            hw_accel = "vaapi"
-
-    # Add input file
-    cmd.extend(["-i", input_path])
-
-    # Add video scaling filter
-    if use_hw_scaling and hw_accel == "vaapi":
-        cmd.extend(["-vf", f"scale_vaapi=w={width}:h={height}"])
-    elif use_hw_scaling and hw_accel in ["cuda", "nvenc"]:
-        cmd.extend(["-vf", f"scale_cuda=w={width}:h={height}"])
-    else:
-        cmd.extend(["-vf", f"scale={width}:{height}"])
-
-    # Add video codec and options based on codec and hardware accel
-    if profile.codec == "h264":
-        if hw_accel == "nvenc":
-            cmd.extend(["-c:v", "h264_nvenc"])
-            # Use presets instead of CRF for NVENC
-            preset = (
-                "p7"
-                if profile.quality == "high"
-                else "p5"
-                if profile.quality == "medium"
-                else "p3"
-            )
-            cmd.extend(["-preset", preset])
-        elif hw_accel == "qsv":
-            cmd.extend(["-c:v", "h264_qsv"])
-            # Set QSV parameters
-            bitrate = (
-                "5M"
-                if profile.quality == "high"
-                else "3M"
-                if profile.quality == "medium"
-                else "1.5M"
-            )
-            cmd.extend(["-b:v", bitrate, "-maxrate", bitrate])
-        elif hw_accel == "vaapi":
-            cmd.extend(["-c:v", "h264_vaapi"])
-            # VAAPI quality targets
-            qp = (
-                "18"
-                if profile.quality == "high"
-                else "23"
-                if profile.quality == "medium"
-                else "28"
-            )
-            cmd.extend(["-qp", qp])
-            cmd.extend(["-low_power", "1"])
-        elif hw_accel == "videotoolbox":
-            cmd.extend(["-c:v", "h264_videotoolbox"])
-            # VideoToolbox quality
-            q = (
-                "50"
-                if profile.quality == "high"
-                else "70"
-                if profile.quality == "medium"
-                else "90"
-            )
-            cmd.extend(["-q:v", q])
-        elif hw_accel == "amf":
-            cmd.extend(["-c:v", "h264_amf"])
-            # AMF quality settings
-            if profile.quality == "high":
-                cmd.extend(["-quality", "quality", "-qp_i", "18", "-qp_p", "20"])
-            elif profile.quality == "medium":
-                cmd.extend(["-quality", "balanced", "-qp_i", "22", "-qp_p", "24"])
-            else:  # low
-                cmd.extend(["-quality", "speed", "-qp_i", "26", "-qp_p", "28"])
-        else:
-            # Software encoding
-            cmd.extend(["-c:v", "libx264"])
-            crf = (
-                "18"
-                if profile.quality == "high"
-                else "22"
-                if profile.quality == "medium"
-                else "28"
-            )
-            cmd.extend(["-crf", crf])
-    elif profile.codec == "hevc":
-        if hw_accel == "nvenc":
-            cmd.extend(["-c:v", "hevc_nvenc"])
-            # Use presets instead of CRF for NVENC
-            preset = (
-                "p7"
-                if profile.quality == "high"
-                else "p5"
-                if profile.quality == "medium"
-                else "p3"
-            )
-            cmd.extend(["-preset", preset])
-        elif hw_accel == "qsv":
-            cmd.extend(["-c:v", "hevc_qsv"])
-            # Set QSV parameters
-            bitrate = (
-                "4M"
-                if profile.quality == "high"
-                else "2.5M"
-                if profile.quality == "medium"
-                else "1M"
-            )
-            cmd.extend(["-b:v", bitrate, "-maxrate", bitrate])
-        elif hw_accel == "vaapi":
-            cmd.extend(["-c:v", "hevc_vaapi"])
-            # VAAPI quality targets
-            qp = (
-                "22"
-                if profile.quality == "high"
-                else "26"
-                if profile.quality == "medium"
-                else "32"
-            )
-            cmd.extend(["-qp", qp])
-            cmd.extend(["-low_power", "1"])
-        elif hw_accel == "videotoolbox":
-            cmd.extend(["-c:v", "hevc_videotoolbox"])
-            # VideoToolbox quality
-            q = (
-                "50"
-                if profile.quality == "high"
-                else "70"
-                if profile.quality == "medium"
-                else "90"
-            )
-            cmd.extend(["-q:v", q])
-        elif hw_accel == "amf":
-            cmd.extend(["-c:v", "hevc_amf"])
-            # AMF quality settings
-            if profile.quality == "high":
-                cmd.extend(["-quality", "quality", "-qp_i", "22", "-qp_p", "24"])
-            elif profile.quality == "medium":
-                cmd.extend(["-quality", "balanced", "-qp_i", "26", "-qp_p", "28"])
-            else:  # low
-                cmd.extend(["-quality", "speed", "-qp_i", "30", "-qp_p", "32"])
-        else:
-            # Software encoding
-            cmd.extend(["-c:v", "libx265"])
-            crf = (
-                "22"
-                if profile.quality == "high"
-                else "26"
-                if profile.quality == "medium"
-                else "32"
-            )
-            cmd.extend(["-crf", crf])
-    elif profile.codec == "av1":
-        # Currently no HW acceleration support for AV1 encoding
-        cmd.extend(["-c:v", "libsvtav1"])
-        crf = (
-            "24"
-            if profile.quality == "high"
-            else "30"
-            if profile.quality == "medium"
-            else "36"
-        )
-        cmd.extend(["-crf", crf])
-    else:
-        logger.warning(f"Unknown codec specified: {profile.codec}, defaulting to h264")
-        cmd.extend(["-c:v", "libx264", "-crf", "22"])
-
-    # Set bitrate if specified
-    if profile.bitrate:
-        cmd.extend(["-b:v", profile.bitrate])
-
-    # Set audio codec
-    cmd.extend(["-c:a", "aac", "-b:a", "128k"])
-
-    # Add output path
-    cmd.extend(["-y", output_path])
-
-    # Add progress monitoring
-    cmd.extend(["-progress", "pipe:1"])
-
-    return cmd
-
-
-def build_alternative_vaapi_command(
-    ffmpeg_path: str,
-    media_item: MediaItem,
-    output_path: str,
-    width: int,
-    height: int,
-    profile: TranscodeProfile,
-    hw_device: str = None,
-):
-    """Build alternative command for VAAPI encoding."""
-    alt_cmd = [ffmpeg_path, "-hwaccel", "vaapi"]
-
-    # Add device if available
-    if hw_device:
-        alt_cmd.extend(["-vaapi_device", hw_device])
-    else:
-        alt_cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
-
-    # Add input file
-    alt_cmd.extend(["-i", media_item.path])
-
-    # Use alternative filter chain
-    alt_cmd.extend(
-        [
-            "-vf",
-            f"format=nv12,hwupload,scale_vaapi=w={width}:h={height}:format=nv12",
-        ]
-    )
-
-    # Add codec
-    if profile.codec == "h264":
-        alt_cmd.extend(["-c:v", "h264_vaapi"])
-        qp = (
-            "18"
-            if profile.quality == "high"
-            else "23"
-            if profile.quality == "medium"
-            else "28"
-        )
-        alt_cmd.extend(["-qp", qp])
-    elif profile.codec == "hevc":
-        alt_cmd.extend(["-c:v", "hevc_vaapi"])
-        qp = (
-            "22"
-            if profile.quality == "high"
-            else "26"
-            if profile.quality == "medium"
-            else "32"
-        )
-        alt_cmd.extend(["-qp", qp])
-    else:
-        # Default to H.264
-        alt_cmd.extend(["-c:v", "h264_vaapi", "-qp", "23"])
-
-    # Add low_power setting
-    alt_cmd.extend(["-low_power", "1"])
-
-    # Add audio codec settings
-    alt_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
-
-    # Add output file
-    alt_cmd.extend(["-y", output_path])
-
-    # Add progress monitoring
-    alt_cmd.extend(["-progress", "pipe:1"])
-
-    return alt_cmd
-
-
-def build_hybrid_command(
-    ffmpeg_path: str,
-    media_item: MediaItem,
-    output_path: str,
-    width: int,
-    height: int,
-    profile: TranscodeProfile,
-    hw_device: str = None,
-):
-    """Build hybrid command with hardware decode but software encode."""
-    hybrid_cmd = [ffmpeg_path, "-hwaccel", "vaapi"]
-
-    # Add device if available
-    if hw_device:
-        hybrid_cmd.extend(["-vaapi_device", hw_device])
-    else:
-        hybrid_cmd.extend(["-vaapi_device", "/dev/dri/renderD128"])
-
-    # Add input file
-    hybrid_cmd.extend(["-i", media_item.path])
-
-    # Use software scaling
-    hybrid_cmd.extend(["-vf", f"scale={width}:{height}"])
-
-    # Use software encoder
-    if profile.codec == "h264":
-        hybrid_cmd.extend(["-c:v", "libx264"])
-        crf = (
-            "18"
-            if profile.quality == "high"
-            else "22"
-            if profile.quality == "medium"
-            else "28"
-        )
-        hybrid_cmd.extend(["-crf", crf])
-    elif profile.codec == "hevc":
-        hybrid_cmd.extend(["-c:v", "libx265"])
-        crf = (
-            "22"
-            if profile.quality == "high"
-            else "26"
-            if profile.quality == "medium"
-            else "32"
-        )
-        hybrid_cmd.extend(["-crf", crf])
-    else:
-        hybrid_cmd.extend(["-c:v", "libx264", "-crf", "23"])
-
-    # Add audio codec settings
-    hybrid_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
-
-    # Add output file
-    hybrid_cmd.extend(["-y", output_path])
-
-    # Add progress monitoring
-    hybrid_cmd.extend(["-progress", "pipe:1"])
-
-    return hybrid_cmd
-
-
-def build_software_command(
-    ffmpeg_path: str,
-    media_item: MediaItem,
-    output_path: str,
-    width: int,
-    height: int,
-    profile: TranscodeProfile,
-):
-    """Build pure software encoding command."""
-    sw_cmd = [ffmpeg_path, "-i", media_item.path]
-
-    # Add software video filter for scaling
-    sw_cmd.extend(["-vf", f"scale={width}:{height}"])
-
-    # Use software codec
-    if profile.codec == "h264":
-        sw_cmd.extend(["-c:v", "libx264"])
-        crf = (
-            "18"
-            if profile.quality == "high"
-            else "22"
-            if profile.quality == "medium"
-            else "28"
-        )
-        sw_cmd.extend(["-crf", crf])
-    elif profile.codec == "hevc":
-        sw_cmd.extend(["-c:v", "libx265"])
-        crf = (
-            "22"
-            if profile.quality == "high"
-            else "26"
-            if profile.quality == "medium"
-            else "32"
-        )
-        sw_cmd.extend(["-crf", crf])
-    else:
-        sw_cmd.extend(["-c:v", "libx264", "-crf", "23"])
-
-    # Add audio codec settings
-    sw_cmd.extend(["-c:a", "aac", "-b:a", "128k"])
-
-    # Add output file
-    sw_cmd.extend(["-y", output_path])
-
-    # Add progress monitoring
-    sw_cmd.extend(["-progress", "pipe:1"])
-
-    return sw_cmd
-
-
-def run_ffmpeg_process(
-    cmd: List[str], job: TranscodeJob, output_path: str, max_log_lines: int = 1000
-):
-    """Run FFmpeg process with progress monitoring."""
-    # Log the command
-    cmd_str = " ".join(cmd)
-    logger.debug(f"FFmpeg command: {cmd_str}")
-    job.ffmpeg_command = cmd_str
-
-    # Create the process
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-        shell=False,
-        encoding="utf-8",
-        errors="replace",
-    )
-
-    # Store process ID for potential cancellation
-    job.process_id = process.pid
-    logger.debug(f"Process ID for job {job.id}: {job.process_id}")
-
-    # Create a queue for log lines
-    log_lines = []
-
-    # Monitor progress
-    while process.poll() is None:
-        # Check if job has been cancelled
-        with job._lock:
-            is_cancelled = job.status == "cancelled"
-        
-        if is_cancelled:
-            logger.info(f"Job {job.id} has been cancelled, terminating process")
-            process.terminate()
-            break
-
-        # Use non-blocking reads from stdout & stderr
-        ready_to_read, _, _ = select.select(
-            [process.stdout, process.stderr], [], [], 0.1
-        )
-
-        for stream in ready_to_read:
-            if stream == process.stdout:
-                stdout_line = stream.readline().strip()
-                if stdout_line:
-                    # Parse progress information
-                    if stdout_line.startswith("out_time_ms="):
-                        try:
-                            time_ms = int(stdout_line.split("=")[1])
-                            current_time = (
-                                time_ms / 1000000
-                            )  # Convert microseconds to seconds
-                            
-                            # Thread-safe progress update
-                            job.update_progress(current_time)
-                            
-                            with job._lock:
-                                progress_value = job.progress
-                                duration_value = job.duration
-                                job_status = job.status
-                                job_current_time = job.current_time
-                                job_output_size = job.output_size
-                                
-                            logger.debug(f"Progress: {progress_value:.2%}")
-
-                            # Import here to avoid circular imports - emit progress every 2 seconds
-                            if int(current_time) % 2 == 0:
-                                from squishy.socket_events import emit_job_update
-
-                                emit_job_update(
-                                    {
-                                        "id": job.id,
-                                        "media_id": job.media_id,
-                                        "status": job_status,
-                                        "progress": progress_value,
-                                        "current_time": job_current_time,
-                                        "duration": duration_value,
-                                        "output_size": job_output_size,
-                                    }
-                                )
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f"Error parsing time: {str(e)}")
-
-                    # Store the line in logs
-                    log_lines.append(f"STDOUT: {stdout_line}")
-                    if len(log_lines) > max_log_lines:
-                        log_lines.pop(0)
-
-            elif stream == process.stderr:
-                stderr_line = stream.readline().strip()
-                if stderr_line:
-                    # Store the line in logs
-                    log_lines.append(f"STDERR: {stderr_line}")
-                    if len(log_lines) > max_log_lines:
-                        log_lines.pop(0)
-
-        # Update job logs with thread safety
-        job.update_logs(log_lines)
-
-        # Check output file size
-        if os.path.exists(output_path):
-            output_size = os.path.getsize(output_path)
-            job.update_output_size(format_file_size(output_size))
-
-        # Thread-safe access to check for stalled process
-        with job._lock:
-            last_progress_time = getattr(job, "last_progress_time", None)
-            current_time = job.current_time
-            stalled_count = getattr(job, "progress_stalled_count", 0)
-            
-            # Check if process might be stuck (hanging)
-            if last_progress_time is not None and current_time and last_progress_time == current_time:
-                # Increment stall counter with proper thread safety
-                job.progress_stalled_count = stalled_count + 1
-                updated_stalled_count = stalled_count + 1
-            else:
-                # Reset stall counter if progress has changed
-                job.progress_stalled_count = 0
-                updated_stalled_count = 0
-                
-            # Store last progress time for stall detection
-            if current_time:
-                job.last_progress_time = current_time
-                
-        # Handle stalled processes outside the lock to avoid holding it too long
-        if updated_stalled_count > 300:
-            # Check process status
-            process_status = get_process_status(process.pid)
-            logger.warning(
-                f"Process {process.pid} appears stalled at {current_time}s with status {process_status}"
-            )
-
-            # Only terminate if the process is a zombie or has been stalled for a very long time
-            # And if we have no file growth at all (real stall, not just slow encoding)
-            if process_status == "Z" or updated_stalled_count > 600:
-                file_growing = False
-
-                # Check if output file exists and is growing
-                if os.path.exists(output_path):
-                    current_size = os.path.getsize(output_path)
-                    
-                    with job._lock:
-                        # Store last size if we haven't already
-                        last_file_size = getattr(job, "last_file_size", None)
-                        if last_file_size is None:
-                            job.last_file_size = current_size
-                        # Check if file is growing
-                        elif current_size > last_file_size:
-                            file_growing = True
-                            job.last_file_size = current_size
-
-                # Only kill the process if it's a zombie or the file isn't growing at all
-                if process_status == "Z" or (updated_stalled_count > 600 and not file_growing):
-                    logger.error(
-                        f"Killing stalled process {process.pid} after {updated_stalled_count} checks"
-                    )
-                    try:
-                        os.kill(process.pid, signal.SIGKILL)
-                        process.poll()  # Force update the returncode
-                    except Exception as e:
-                        logger.error(f"Error killing process: {str(e)}")
-                    break
-
-    # Get the final output
-    stdout, stderr = process.communicate()
-
-    # Add final output to logs
-    for line in stdout.splitlines():
-        if line.strip():
-            log_lines.append(f"STDOUT: {line.strip()}")
-
-    for line in stderr.splitlines():
-        if line.strip():
-            log_lines.append(f"STDERR: {line.strip()}")
-
-    # Update job logs one last time with thread safety
-    final_logs = log_lines[-max_log_lines:] if len(log_lines) > max_log_lines else log_lines
-    job.update_logs(final_logs)
-
-    return process.returncode, stdout, stderr
-
-
-def detect_hw_accel_error(stderr: str) -> bool:
-    """Detect hardware acceleration failure."""
-    hw_error_patterns = [
-        "No usable encoding profile found",
-        "Error initializing output stream",
-        "Invalid hardware device ",
-        "Cannot load hwaccel",
-        "Failed to set value",
-        "Device creation failed",
-        "Cannot open the hardware device",
-        "Failed to open VAAPI device",
-        "Error initializing an internal frame pool",
-    ]
-
-    for pattern in hw_error_patterns:
-        if pattern in stderr:
-            return True
-    return False
-
-
 def transcode(
-    job: TranscodeJob, media_item: MediaItem, profile: TranscodeProfile, output_dir: str
+    job: TranscodeJob, media_item: MediaItem, preset_name: str, output_dir: str
 ):
-    """Perform the transcoding."""
+    """Perform the transcoding using effeffmpeg."""
     try:
         # Update status with thread safety
         job.update_status("processing")
         logger.debug(f"Job {job.id} status changed to processing")
 
+        # Get the preset from config
+        config = load_config()
+        if preset_name not in config.presets:
+            raise ValueError(f"Preset '{preset_name}' not found in configuration")
+            
+        preset = config.presets[preset_name]
+
         # Get original filename without extension
         original_filename = os.path.basename(media_item.path)
         filename_without_ext, _ = os.path.splitext(original_filename)
 
-        # Create output filename with profile name in parentheses
-        output_filename = f"{filename_without_ext} ({profile.name}).{profile.container}"
+        # Get container format from preset (remove leading dot if present)
+        container = preset.get("container", ".mkv")
+        if container.startswith("."):
+            container = container[1:]
+
+        # Create output filename with preset name in parentheses
+        output_filename = f"{filename_without_ext} ({preset_name}).{container}"
         output_path = os.path.join(output_dir, output_filename)
         logger.debug(f"Output path: {output_path}")
 
@@ -905,304 +320,207 @@ def transcode(
         os.makedirs(output_dir, exist_ok=True)
         logger.debug(f"Ensured output directory exists: {output_dir}")
 
-        # Get ffmpeg path from config
-        config = load_config()
-        ffmpeg_path = config.ffmpeg_path
-        logger.debug(f"Using ffmpeg from: {ffmpeg_path}")
-
         # Check if input file exists
         if not os.path.exists(media_item.path):
             raise FileNotFoundError(f"Input file not found: {media_item.path}")
 
-        # Parse resolution
-        logger.debug(f"Parsing resolution: {profile.resolution}")
-        try:
-            width, height = map(int, profile.resolution.split("x"))
-            logger.debug(f"Parsed width={width}, height={height}")
-        except ValueError:
-            logger.error(f"Invalid resolution format: {profile.resolution}")
-            raise ValueError(f"Invalid resolution format: {profile.resolution}")
+        # Create a progress callback to update the job status
+        def progress_callback(status_text, progress_value):
+            # Extract current time from status text if possible
+            time_match = re.search(r"Time: (\d+):(\d+):([\d.]+)", status_text)
+            if time_match:
+                h, m, s = time_match.groups()
+                current_time = int(h) * 3600 + int(m) * 60 + float(s)
+                job.current_time = current_time
 
-        # Determine hardware acceleration settings (inherit global if not set in profile)
-        active_hw_accel = None
-        active_hw_device = None
+            # Extract duration from status if available
+            duration_match = re.search(r"(\d+):(\d+):([\d.]+)", status_text)
+            if duration_match and "/" in status_text:
+                parts = status_text.split("/", 1)
+                if len(parts) == 2 and duration_match:
+                    h, m, s = re.search(r"(\d+):(\d+):([\d.]+)", parts[1]).groups()
+                    job.duration = int(h) * 3600 + int(m) * 60 + float(s)
 
-        # If profile has explicit hw_accel (not inherited), use it
-        if profile.hw_accel and profile.hw_accel != "inherit":
-            logger.debug(
-                f"Using profile-specific hardware acceleration: {profile.hw_accel}"
-            )
-            active_hw_accel = profile.hw_accel
-            active_hw_device = profile.hw_device
-        # Otherwise, if global hw_accel is set, use that
-        elif config.hw_accel:
-            logger.debug(f"Using global hardware acceleration: {config.hw_accel}")
-            active_hw_accel = config.hw_accel
-            active_hw_device = config.hw_device
+            if progress_value is not None:
+                job.progress = progress_value
 
-        # Default to VAAPI if no acceleration specified
-        if not active_hw_accel:
-            active_hw_accel = "vaapi"
-            active_hw_device = "/dev/dri/renderD128"  # Default VAAPI device
-            logger.debug(f"Using default VAAPI hardware acceleration")
+            # Add to logs if it's not just a progress update
+            if not status_text.startswith("Time:"):
+                if len(job.ffmpeg_logs) >= 1000:
+                    job.ffmpeg_logs.pop(0)  # Remove oldest log if we have too many
+                job.ffmpeg_logs.append(status_text)
 
-        # Get media duration
-        duration = get_media_duration(ffmpeg_path, media_item.path)
-        if duration:
-            job.duration = duration
-            logger.debug(f"Media duration: {duration} seconds")
+            # Emit socket update every 2 seconds
+            if job.current_time and int(job.current_time) % 2 == 0:
+                try:
+                    from squishy.socket_events import emit_job_update
+                    emit_job_update({
+                        "id": job.id,
+                        "media_id": job.media_id,
+                        "status": job.status,
+                        "progress": job.progress,
+                        "current_time": job.current_time,
+                        "duration": job.duration,
+                    })
+                except ImportError:
+                    pass  # Ignore if socket_events can't be imported
 
-        # Build initial command with hardware acceleration
-        cmd = build_ffmpeg_command(
-            ffmpeg_path,
-            media_item.path,
-            output_path,
-            width,
-            height,
-            profile,
-            active_hw_accel,
-            active_hw_device,
-            True,
-        )
-
-        # Run the transcoding
-        logger.debug(f"Starting FFmpeg process for job {job.id}")
-        returncode, stdout, stderr = run_ffmpeg_process(cmd, job, output_path)
-
-        # Check if job was cancelled
-        if job.status == "cancelled":
-            logger.info(f"Job {job.id} was cancelled")
-            return
-
-        if returncode != 0:
-            logger.error(f"FFmpeg process failed with return code {returncode}")
-            logger.error(f"FFmpeg stderr: {stderr}")
-
-            # Check if this was a hardware acceleration failure
-            hw_accel_error = detect_hw_accel_error(stderr)
-
-            # Check if the profile allows hardware acceleration failover
-            allow_failover = profile.allow_hw_failover
-
-            # Handle hardware acceleration failures with fallback approaches
-            if hw_accel_error and active_hw_accel and allow_failover:
-                # First try alternate method based on current acceleration
-                if active_hw_accel == "vaapi":
-                    # Try alternate VAAPI approach
-                    logger.warning(
-                        "Standard VAAPI acceleration failed, trying alternate VAAPI approach"
-                    )
-                    job.ffmpeg_logs.append(
-                        "NOTICE: Standard VAAPI encoding failed, trying alternate VAAPI approach..."
-                    )
-
-                    # Create and run alternate VAAPI command
-                    alt_cmd = build_alternative_vaapi_command(
-                        ffmpeg_path,
-                        media_item,
-                        output_path,
-                        width,
-                        height,
-                        profile,
-                        active_hw_device,
-                    )
-
-                    logger.info(
-                        f"Trying alternate VAAPI encoding approach for job {job.id}"
-                    )
-                    alt_returncode, alt_stdout, alt_stderr = run_ffmpeg_process(
-                        alt_cmd, job, output_path
-                    )
-
-                    # Check if job was cancelled
-                    if job.status == "cancelled":
-                        logger.info(
-                            f"Alternate VAAPI encoding job {job.id} was cancelled"
-                        )
-                        return
-
-                    # If alternate method succeeded, we're done
-                    if alt_returncode == 0:
-                        logger.info(
-                            f"Successfully used alternate VAAPI approach for job {job.id}"
-                        )
-                        job.ffmpeg_logs.append(
-                            "SUCCESS: Alternate VAAPI approach worked successfully for HDR content"
-                        )
-                        # Update job status
-                        job.status = "completed"
-                        job.progress = 1.0
-                        job.output_path = output_path
-                        if os.path.exists(output_path):
-                            output_size = os.path.getsize(output_path)
-                            job.output_size = format_file_size(output_size)
-                        return
-
-                # If we're here, try hybrid approach (HW decode + SW encode) for VAAPI
-                if active_hw_accel == "vaapi":
-                    logger.warning(
-                        "Both standard and alternate VAAPI encoding approaches failed, trying HW decode + SW encode"
-                    )
-                    job.ffmpeg_logs.append(
-                        "NOTICE: Both VAAPI encoding methods failed, trying hardware decode + software encode as last resort before full software mode..."
-                    )
-
-                    # Create and run hybrid command
-                    hybrid_cmd = build_hybrid_command(
-                        ffmpeg_path,
-                        media_item,
-                        output_path,
-                        width,
-                        height,
-                        profile,
-                        active_hw_device,
-                    )
-
-                    logger.info(
-                        f"Trying hybrid hardware decode + software encode for job {job.id}"
-                    )
-                    hybrid_returncode, hybrid_stdout, hybrid_stderr = (
-                        run_ffmpeg_process(hybrid_cmd, job, output_path)
-                    )
-
-                    # Check if job was cancelled
-                    if job.status == "cancelled":
-                        logger.info(f"Hybrid encoding job {job.id} was cancelled")
-                        return
-
-                    # If hybrid approach succeeded, we're done
-                    if hybrid_returncode == 0:
-                        logger.info(
-                            f"Hybrid hardware decode + software encode succeeded for job {job.id}"
-                        )
-                        # Update job status
-                        job.status = "completed"
-                        job.progress = 1.0
-                        job.output_path = output_path
-                        if os.path.exists(output_path):
-                            output_size = os.path.getsize(output_path)
-                            job.output_size = format_file_size(output_size)
-                        return
-
-                # Last resort - pure software encoding
-                logger.warning(
-                    f"All hardware acceleration attempts with {active_hw_accel} failed, falling back to pure software encoding"
-                )
-                if active_hw_accel == "vaapi":
-                    job.ffmpeg_logs.append(
-                        "NOTICE: All VAAPI approaches failed, falling back to pure software encoding..."
-                    )
-                else:
-                    job.ffmpeg_logs.append(
-                        f"NOTICE: Hardware acceleration with {active_hw_accel} failed, falling back to software encoding..."
-                    )
-
-                # Create and run software-only command
-                sw_cmd = build_software_command(
-                    ffmpeg_path, media_item, output_path, width, height, profile
-                )
-
-                logger.info(f"Retrying with software encoding for job {job.id}")
-                sw_returncode, sw_stdout, sw_stderr = run_ffmpeg_process(
-                    sw_cmd, job, output_path
-                )
-
-                # Check if job was cancelled
-                if job.status == "cancelled":
-                    logger.info(f"Software encoding job {job.id} was cancelled")
-                    return
-
-                # Check if software encoding succeeded
-                if sw_returncode != 0:
-                    logger.error(
-                        f"Software encoding also failed with return code {sw_returncode}"
-                    )
-                    logger.error(f"FFmpeg stderr: {sw_stderr}")
-                    raise RuntimeError(
-                        f"Both hardware acceleration and software encoding failed for job {job.id}"
-                    )
-                else:
-                    # Software encoding succeeded
-                    logger.info(
-                        f"Software encoding succeeded after hardware acceleration failed for job {job.id}"
-                    )
-            elif hw_accel_error and active_hw_accel and not allow_failover:
-                # Hardware acceleration failed and failover not allowed
-                err_msg = f"Hardware acceleration with {active_hw_accel} failed and failover to software is not allowed by profile"
-                logger.error(err_msg)
-                job.ffmpeg_logs.append(f"ERROR: {err_msg}")
-                raise RuntimeError(err_msg)
-            else:
-                # Not a hardware acceleration error or no hardware acceleration was used
-                raise RuntimeError(f"FFmpeg failed with return code {returncode}")
-
-        logger.debug(f"FFmpeg process completed successfully for job {job.id}")
-
-        # Update job status with thread safety
-        job.update_status("completed")
+        # Get hardware acceleration settings from config
+        hw_accel = config.hw_accel
+        hw_device = config.hw_device
         
-        # Update progress and output path with thread safety
-        with job._lock:
-            job.progress = 1.0
-            job.output_path = output_path
+        # Override force_software if hw_accel is set to none
+        if hw_accel and hw_accel.lower() == "none":
+            preset["force_software"] = True
 
-        # Get final output file size
-        if os.path.exists(output_path):
-            output_size = os.path.getsize(output_path)
-            job.update_output_size(format_file_size(output_size))
+        # Run the effeffmpeg transcoding
+        logger.info(f"Starting transcode for job {job.id} using effeffmpeg")
+        
+        try:
+            # Generate the command first with dry_run to log it
+            command = effeff_transcode(
+                input_file=media_item.path,
+                output_file=output_path,
+                dry_run=True,
+                overwrite=True,
+                presets_data={"preset": preset}  # Wrap the preset in a dict as expected by effeffmpeg
+            )
+            
+            # Store the command in the job
+            cmd_str = " ".join(command)
+            job.ffmpeg_command = cmd_str
+            logger.debug(f"FFmpeg command: {cmd_str}")
 
-        logger.debug(
-            f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}"
-        )
+            # Now run the actual transcode non-blocking to use our progress callback
+            process = effeff_transcode(
+                input_file=media_item.path,
+                output_file=output_path,
+                overwrite=True,
+                non_blocking=True,
+                progress_callback=progress_callback,
+                preset_name="preset",  # Use the preset name
+                presets_data={"preset": preset}  # Pass the preset data directly
+            )
+            
+            # Store the process ID for potential cancellation
+            if hasattr(process, "process") and process.process:
+                job.process_id = process.process.pid
+                logger.debug(f"Process ID for job {job.id}: {job.process_id}")
 
-        # Create JSON sidecar file with metadata
-        sidecar_path = f"{output_path}.json"
+            # Monitor the process
+            cancelled = False
+            while not process.finished:
+                # Check if job has been cancelled
+                with job._lock:
+                    is_cancelled = job.status == "cancelled"
+                
+                if is_cancelled:
+                    logger.info(f"Job {job.id} has been cancelled, terminating process")
+                    process.terminate()
+                    cancelled = True
+                    break
+                
+                # Update output file size
+                if os.path.exists(output_path):
+                    output_size = os.path.getsize(output_path)
+                    job.update_output_size(format_file_size(output_size))
+                
+                # Use process.poll() instead of wait with timeout to check if it's still running
+                # This avoids the TimeoutExpired exception when using eventlet's patched subprocess
+                if process.process.poll() is not None:
+                    # Process completed
+                    process.finished = True
+                    process.returncode = process.process.returncode
+                    break
+                    
+                # Sleep for a short time
+                time.sleep(0.5)
 
-        # Handle poster_url and thumbnail_url differently for Movies vs Episodes
-        poster_url = None
-        thumbnail_url = None
+            # If cancelled, return early
+            if cancelled:
+                return
 
-        if isinstance(media_item, Episode):
-            # For episodes, we want to use the parent show's poster as the poster_url
-            # and the episode's thumbnail as the thumbnail_url
-            from squishy.scanner import get_show
+            # Check if the process completed successfully
+            if process.returncode != 0:
+                stderr = process.get_stderr()
+                logger.error(f"Transcode failed with code {process.returncode}: {stderr}")
+                raise RuntimeError(f"Transcode failed with code {process.returncode}")
 
-            show = get_show(media_item.show_id)
-            if show:
-                poster_url = show.poster_url
-            # Use the episode's thumbnail_url if available, otherwise fall back to poster_url
-            thumbnail_url = media_item.thumbnail_url or media_item.poster_url
-        else:
-            # For movies, use the movie's poster_url as poster
-            poster_url = media_item.poster_url
-            # Use movie's thumbnail_url if available, otherwise fall back to poster_url
-            thumbnail_url = media_item.thumbnail_url or media_item.poster_url
+            # Update job status
+            job.update_status("completed")
+            
+            # Update progress and output path
+            with job._lock:
+                job.progress = 1.0
+                job.output_path = output_path
 
-        metadata = {
-            "original_path": media_item.path,
-            "media_id": media_item.id,
-            "title": media_item.title,
-            "year": media_item.year,
-            "type": media_item.type,
-            "poster_url": poster_url,
-            "thumbnail_url": thumbnail_url,
-            "profile_name": profile.name,
-            "completed_at": datetime.datetime.now().isoformat(),
-            "output_size": job.output_size,
-            "duration": job.duration,
-        }
+            # Get final output file size
+            if os.path.exists(output_path):
+                output_size = os.path.getsize(output_path)
+                job.update_output_size(format_file_size(output_size))
 
-        # Add TV show specific metadata if applicable
-        if isinstance(media_item, Episode):
-            metadata["show_id"] = media_item.show_id
-            metadata["season_number"] = media_item.season_number
-            metadata["episode_number"] = media_item.episode_number
+            logger.debug(
+                f"Job {job.id} completed successfully, output: {output_path}, size: {job.output_size}"
+            )
 
-        # Write metadata to sidecar file
-        with open(sidecar_path, "w") as f:
-            json.dump(metadata, f, indent=2)
+            # Create JSON sidecar file with metadata
+            sidecar_path = f"{output_path}.json"
 
-        logger.debug(f"Created metadata sidecar file: {sidecar_path}")
+            # Handle poster_url and thumbnail_url differently for Movies vs Episodes
+            poster_url = None
+            thumbnail_url = None
+
+            if isinstance(media_item, Episode):
+                # For episodes, we want to use the parent show's poster as the poster_url
+                # and the episode's thumbnail as the thumbnail_url
+                from squishy.scanner import get_show
+
+                show = get_show(media_item.show_id)
+                if show:
+                    poster_url = show.poster_url
+                # Use the episode's thumbnail_url if available, otherwise fall back to poster_url
+                thumbnail_url = media_item.thumbnail_url or media_item.poster_url
+            else:
+                # For movies, use the movie's poster_url as poster
+                poster_url = media_item.poster_url
+                # Use movie's thumbnail_url if available, otherwise fall back to poster_url
+                thumbnail_url = media_item.thumbnail_url or media_item.poster_url
+
+            metadata = {
+                "original_path": media_item.path,
+                "media_id": media_item.id,
+                "title": media_item.title,
+                "year": media_item.year,
+                "type": media_item.type,
+                "poster_url": poster_url,
+                "thumbnail_url": thumbnail_url,
+                "preset_name": preset_name,
+                "completed_at": datetime.datetime.now().isoformat(),
+                "output_size": job.output_size,
+                "duration": job.duration,
+            }
+
+            # Add TV show specific metadata if applicable
+            if isinstance(media_item, Episode):
+                metadata["show_id"] = media_item.show_id
+                metadata["season_number"] = media_item.season_number
+                metadata["episode_number"] = media_item.episode_number
+                
+                # Add show title to the metadata
+                from squishy.scanner import get_show
+                show = get_show(media_item.show_id)
+                if show:
+                    metadata["show_title"] = show.title
+
+            # Write metadata to sidecar file
+            with open(sidecar_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+
+            logger.debug(f"Created metadata sidecar file: {sidecar_path}")
+
+        except Exception as e:
+            logger.error(f"Error during transcoding: {str(e)}", exc_info=True)
+            raise
 
     except Exception as e:
         logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
@@ -1231,14 +549,27 @@ def transcode(
             job.update_logs(error_lines)
 
 
-def get_media_duration(ffmpeg_path: str, input_path: str) -> Optional[float]:
-    """Get the duration of a media file in seconds."""
+def get_media_duration(input_path: str) -> Optional[float]:
+    """Get the duration of a media file in seconds using effeffmpeg."""
     try:
-        cmd = [ffmpeg_path, "-i", input_path]
-        result = subprocess.run(
-            cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-        )
-
+        # Run ffprobe to get duration
+        ffprobe_cmd = ["ffprobe", "-v", "error", "-show_entries", 
+                      "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", 
+                      input_path]
+        
+        result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                # ffprobe returns duration in seconds as a float
+                return float(result.stdout.strip())
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error parsing ffprobe duration: {e}")
+        
+        # Fall back to regex parsing if ffprobe doesn't return a clean duration
+        ffmpeg_cmd = ["ffmpeg", "-i", input_path]
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
         # Look for duration in the output
         duration_match = re.search(
             r"Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})", result.stderr
@@ -1296,11 +627,18 @@ def get_process_status(pid: int) -> Optional[str]:
 
 
 def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
-    """Detect available hardware acceleration methods.
-
-    Returns:
-        Dict containing available HW acceleration methods and devices.
-    """
+    """Detect available hardware acceleration methods using effeffmpeg."""
+    config = load_config()
+    
+    # Check if we have hw_capabilities in config
+    if config.hw_capabilities:
+        capabilities = config.hw_capabilities
+        logger.info("Using hardware capabilities from config")
+    else:
+        # Use effeffmpeg's detect_capabilities
+        capabilities = detect_capabilities()
+    
+    # Format the results to match the expected output format in the admin UI
     result = {
         "methods": [],
         "devices": {
@@ -1315,114 +653,32 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
         },
         "recommended": {"method": "", "device": ""},
     }
-
-    logger.debug("Detecting available hardware acceleration methods...")
-
-    # Check FFmpeg version and codecs
-    try:
-        # Get FFmpeg version info
-        version_cmd = [ffmpeg_path, "-version"]
-        version_output = subprocess.check_output(
-            version_cmd, stderr=subprocess.STDOUT, text=True
-        )
-        logger.debug(
-            f"FFmpeg version: {version_output.splitlines()[0] if version_output.splitlines() else 'unknown'}"
-        )
-
-        # Get available encoders
-        encoders_cmd = [ffmpeg_path, "-encoders"]
-        encoders_output = subprocess.check_output(
-            encoders_cmd, stderr=subprocess.STDOUT, text=True
-        )
-
-        # Check for hardware encoder presence
-        if re.search(r"h264_nvenc", encoders_output):
-            result["methods"].append("nvenc")
-        if re.search(r"hevc_nvenc", encoders_output):
-            if "nvenc" not in result["methods"]:
-                result["methods"].append("nvenc")
-        if re.search(r"h264_qsv", encoders_output):
-            result["methods"].append("qsv")
-        if re.search(r"hevc_qsv", encoders_output):
-            if "qsv" not in result["methods"]:
-                result["methods"].append("qsv")
-        if re.search(r"h264_vaapi", encoders_output):
-            result["methods"].append("vaapi")
-        if re.search(r"h264_videotoolbox", encoders_output):
-            result["methods"].append("videotoolbox")
-        if re.search(r"h264_amf", encoders_output):
-            result["methods"].append("amf")
-
-        # Check for -hwaccel support
-        hwaccels_cmd = [ffmpeg_path, "-hwaccels"]
-        try:
-            hwaccels_output = subprocess.check_output(
-                hwaccels_cmd, stderr=subprocess.STDOUT, text=True
-            )
-
-            # Parse hwaccels output
-            for line in hwaccels_output.splitlines():
-                line = line.strip()
-                if line and line != "Hardware acceleration methods:":
-                    if line not in result["methods"]:
-                        result["methods"].append(line)
-        except subprocess.CalledProcessError:
-            # Some FFmpeg builds don't support -hwaccels
-            logger.warning("FFmpeg -hwaccels command not supported")
-
-        # Check for CUDA devices if NVENC is available
-        if "nvenc" in result["methods"] or "cuda" in result["methods"]:
-            try:
-                # Try to get NVIDIA device info
-                nvidia_smi_cmd = [
-                    "nvidia-smi",
-                    "--query-gpu=name,index",
-                    "--format=csv,noheader",
-                ]
-                nvidia_output = subprocess.check_output(
-                    nvidia_smi_cmd, stderr=subprocess.PIPE, text=True
-                )
-
-                for line in nvidia_output.splitlines():
-                    parts = line.strip().split(", ")
-                    if len(parts) == 2:
-                        name, index = parts
-                        result["devices"]["cuda"].append({"name": name, "index": index})
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                logger.warning("nvidia-smi command failed or not found")
-
-        # Check for VAAPI devices
-        if "vaapi" in result["methods"]:
-            # Common VAAPI device nodes
-            for device_path in ["/dev/dri/renderD128", "/dev/dri/card0"]:
-                if os.path.exists(device_path):
-                    result["devices"]["vaapi"].append({"path": device_path})
-
-        # Determine recommended method
-        if "vaapi" in result["methods"] and result["devices"]["vaapi"]:
-            # VAAPI is the most compatible option on Linux
-            result["recommended"]["method"] = "vaapi"
-            result["recommended"]["device"] = result["devices"]["vaapi"][0]["path"]
-        elif "nvenc" in result["methods"] and result["devices"]["cuda"]:
-            # NVENC if available
-            result["recommended"]["method"] = "nvenc"
-            result["recommended"]["device"] = result["devices"]["cuda"][0]["index"]
-        elif "videotoolbox" in result["methods"]:
-            # VideoToolbox on macOS
-            result["recommended"]["method"] = "videotoolbox"
-        elif "amf" in result["methods"]:
-            # AMD AMF
-            result["recommended"]["method"] = "amf"
-
-        logger.info(
-            f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}"
-        )
-        logger.info(f"Recommended method: {result['recommended']['method'] or 'None'}")
-        return result
-
-    except Exception as e:
-        logger.error(f"Error detecting hardware acceleration: {str(e)}", exc_info=True)
-        return result
+    
+    # Add detected methods
+    hwaccel = capabilities.get("hwaccel")
+    if hwaccel:
+        result["methods"].append(hwaccel)
+        
+    # Add detected encoders as methods
+    for codec, encoder in capabilities.get("encoders", {}).items():
+        method = encoder.split('_')[1] if '_' in encoder else encoder
+        if method not in result["methods"]:
+            result["methods"].append(method)
+    
+    # Add detected devices
+    device = capabilities.get("device")
+    if device and hwaccel == "vaapi":
+        result["devices"]["vaapi"].append({"path": device})
+    
+    # Set recommended method and device
+    if hwaccel:
+        result["recommended"]["method"] = hwaccel
+        result["recommended"]["device"] = device
+    
+    logger.info(f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}")
+    logger.info(f"Recommended method: {result['recommended']['method'] or 'None'}")
+    
+    return result
 
 
 def cancel_job(job_id: str) -> bool:

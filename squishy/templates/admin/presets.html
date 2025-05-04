@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block title %}Transcoding Presets - Squishy{% endblock %}
+
+{% block head %}
+{% endblock %}
+
+
+{% block content %}
+<div class="back-button-container">
+    <a href="{{ url_for('admin.index') }}" class="button back-button">← Back to Settings</a>
+</div>
+
+<div class="presets-list">
+    <div class="section-header">
+        <h1>Transcoding Presets</h1>
+    </div>
+
+    {% if presets %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Scale</th>
+                <th>Codec</th>
+                <th>Container</th>
+                <th>Quality</th>
+                <th>Audio</th>
+                <th>HW Accel</th>
+                <th>Fallback</th>
+                <th class="align-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, preset in presets.items() %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>{{ preset.get('scale', '-') }}</td>
+                <td>{{ preset.get('codec', 'h264') }}</td>
+                <td>{{ preset.get('container', '.mkv') }}</td>
+                <td>
+                    {% if preset.get('crf') %}
+                        CRF {{ preset.get('crf') }}
+                    {% elif preset.get('bitrate') %}
+                        {{ preset.get('bitrate') }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ preset.get('audio_codec', 'aac') }} {{ preset.get('audio_bitrate', '') }}</td>
+                <td>
+                    {% if preset.get('force_software', False) %}
+                        <span class="hw-disabled">Off</span>
+                    {% else %}
+                        <span class="hw-enabled">On</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if preset.get('allow_fallback', True) %}
+                        <span class="failover-enabled">Enabled</span>
+                    {% else %}
+                        <span class="failover-disabled">Disabled</span>
+                    {% endif %}
+                </td>
+                <td class="align-right">
+                    <div class="action-buttons">
+                        <a href="{{ url_for('admin.edit_preset', name=name) }}" class="button small">Edit</a>
+                        <form action="{{ url_for('admin.delete_preset', name=name) }}" method="post">
+                            <button type="submit" class="button small danger">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-mascot">
+            <img src="/static/img/anvil-surprised.png" alt="No presets">
+        </div>
+        <p>No presets found.</p>
+    </div>
+    {% endif %}
+    <div class="actions">
+        <a href="{{ url_for('admin.add_preset') }}" class="button">Add Preset</a>
+    </div>
+    
+    <div class="preset-management">
+        <h2>Preset Management</h2>
+        
+        <div class="card">
+            <h3>Export Presets</h3>
+            <p>Export your current presets to a JSON file that can be backed up or shared.</p>
+            <a href="{{ url_for('admin.export_presets') }}" class="button">Export Presets</a>
+        </div>
+        
+        <div class="card">
+            <h3>Import Presets</h3>
+            <form action="{{ url_for('admin.import_presets') }}" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label>Upload a preset JSON file:</label>
+                    <input type="file" name="preset_file" accept=".json">
+                </div>
+                
+                <div class="form-group">
+                    <label>Import Mode:</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="merge_mode" value="overwrite" checked> Replace all existing presets</label>
+                        <label><input type="radio" name="merge_mode" value="merge"> Add to existing presets</label>
+                    </div>
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit" class="button">Import from File</button>
+                </div>
+            </form>
+        </div>
+        
+        {% if preset_templates %}
+        <div class="card">
+            <h3>Use Predefined Presets</h3>
+            <p>Import presets from predefined templates provided by effeffmpeg:</p>
+            
+            <form action="{{ url_for('admin.import_presets') }}" method="post">
+                <div class="form-group">
+                    <label>Select a preset template:</label>
+                    <select name="template_file">
+                        {% for template in preset_templates %}
+                        <option value="{{ template.file_path }}">{{ template.display_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Import Mode:</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="merge_mode" value="overwrite" checked> Replace all existing presets</label>
+                        <label><input type="radio" name="merge_mode" value="merge"> Add to existing presets</label>
+                    </div>
+                </div>
+                
+                <div class="form-submit">
+                    <button type="submit" class="button">Import Template</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

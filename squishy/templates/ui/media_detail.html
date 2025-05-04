@@ -100,10 +100,10 @@
             
             <form action="{{ url_for('ui.transcode', media_id=media.id) }}" method="post" class="transcode-form">
                 <div class="form-group">
-                    <label for="profile">Profile</label>
-                    <select id="profile" name="profile" required>
-                        {% for name, profile in profiles.items() %}
-                        <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
+                    <label for="preset_name">Preset</label>
+                    <select id="preset_name" name="preset_name" required>
+                        {% for name, preset in profiles.items() %}
+                        <option value="{{ name }}">{{ name }} ({{ preset.scale }}, {{ preset.codec }})</option>
                         {% endfor %}
                     </select>
                 </div>

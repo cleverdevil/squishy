@@ -15,16 +15,16 @@
         <a href="{{ url_for('ui.index') }}" class="button back-button">← Back to Home</a>
     </div>
 
-    <div class="show-header">
+    <div class="media-header">
         {% if show.poster_url %}
-        <img src="{{ show.poster_url }}" alt="{{ show.title }}" class="show-poster">
+        <img src="{{ show.poster_url }}" alt="{{ show.title }}" class="media-poster">
         {% else %}
         <div class="placeholder-poster large">
             <span>{{ show.title[0] }}</span>
         </div>
         {% endif %}
 
-        <div class="show-info">
+        <div class="media-info">
             <h1>{{ show.display_name }}</h1>
 
             <div class="media-meta">
@@ -44,25 +44,39 @@
                 {% endif %}
             </p>
 
-            <div class="show-details">
+            <div class="media-metadata">
                 {% if show.first_air_date %}
-                <div class="detail-item">
-                    <div class="detail-label">First Aired:</div>
-                    <div class="detail-value">{{ show.first_air_date[:10] }}</div>
+                <div class="metadata-item">
+                    <span class="metadata-label">First Aired:</span>
+                    <span class="metadata-value">{{ show.first_air_date[:10] }}</span>
                 </div>
                 {% endif %}
 
                 {% if show.content_rating %}
-                <div class="detail-item">
-                    <div class="detail-label">Content Rating:</div>
-                    <div class="detail-value">{{ show.content_rating }}</div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Content Rating:</span>
+                    <span class="metadata-value">{{ show.content_rating }}</span>
                 </div>
                 {% endif %}
 
                 {% if show.rating %}
-                <div class="detail-item">
-                    <div class="detail-label">Rating:</div>
-                    <div class="detail-value">{{ '%0.1f'|format(show.rating) }}/10</div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Rating:</span>
+                    <span class="metadata-value">{{ '%0.1f'|format(show.rating) }}/10</span>
+                </div>
+                {% endif %}
+
+                {% if show.genres %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Genres:</span>
+                    <span class="metadata-value">{{ show.genres|join(', ') }}</span>
+                </div>
+                {% endif %}
+                
+                {% if show.studio %}
+                <div class="metadata-item">
+                    <span class="metadata-label">Network:</span>
+                    <span class="metadata-value">{{ show.studio }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -149,9 +163,9 @@
 
             <form id="squishForm" action="{{ url_for('ui.transcode', media_id='placeholder') }}" method="post">
                 <div class="form-group">
-                    <select id="squishProfile" name="profile" required>
-                        {% for name, profile in profiles.items() %}
-                        <option value="{{ name }}">{{ name }} ({{ profile.resolution }}, {{ profile.codec }})</option>
+                    <select id="squishProfile" name="preset_name" required>
+                        {% for name, preset in profiles.items() %}
+                        <option value="{{ name }}">{{ name }} ({{ preset.scale }}, {{ preset.codec }})</option>
                         {% endfor %}
                     </select>
                 </div>

@@ -574,7 +574,8 @@ table {
 
 thead {
   background-color: var(--primary-color);
-  color: white;
+  color: var(--accent-color);
+  font-weight: 600;
 }
 
 th, td {
@@ -819,7 +820,7 @@ tbody tr:hover {
 
 .media-detail h1 {
   margin: 1rem 0 1rem;
-  color: var(--primary-color);
+  color: var(--accent-color);
 }
 
 .media-detail .admin-section {
@@ -949,7 +950,7 @@ tbody tr:hover {
 }
 
 .metadata-label {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--dark-color);
   margin-right: 0.5rem;
   white-space: nowrap;
@@ -1412,18 +1413,44 @@ progress {
 
 /* Path mapping */
 .path-mapping-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  align-items: flex-end;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1rem;
   background-color: #f9f9f9;
   border-radius: 4px;
   padding: 1rem;
 }
 
+.mapping-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  flex: 1;
+}
+
+.mapping-actions {
+  margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .path-mapping-row .form-group {
   margin-bottom: 0;
+}
+
+.path-mapping-empty {
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-left: 3px solid var(--warning-color);
+}
+
+.path-mapping-empty p {
+  margin: 0;
+  color: #666;
 }
 
 /* Hardware acceleration indicators */
@@ -1496,6 +1523,47 @@ progress {
   font-size: 0.9rem;
   display: flex;
   align-items: center;
+}
+
+/* Hardware acceleration summary section */
+.hw-summary-section {
+  margin-bottom: 20px;
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 4px;
+  border-left: 3px solid var(--secondary-color);
+}
+
+.recommended-hw {
+  margin-top: 15px;
+  background-color: #e8f7f6;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 3px solid var(--success-color);
+}
+
+/* Hardware capabilities JSON editor */
+.capabilities-json {
+  margin-top: 20px;
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 4px;
+  border-left: 3px solid var(--accent-color);
+}
+
+.capabilities-actions {
+  margin-top: 15px;
+  display: flex;
+  gap: 10px;
+}
+
+.advanced-note {
+  background-color: #fff4e5;
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 3px solid var(--warning-color);
+  margin: 10px 0;
+  font-size: 0.9rem;
 }
 
 .error {
@@ -1590,11 +1658,14 @@ progress {
   height: 100%;
   overflow: auto;
   background-color: rgba(0, 0, 0, 0.5);
+  /* Add flexbox for better centering */
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-content {
   background-color: white;
-  margin: 10% auto;
+  margin: 0 auto;
   padding: 0;
   border-radius: 8px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -1647,7 +1718,6 @@ progress {
 
 .modal-body {
   padding: 1rem;
-  max-height: 400px;
   overflow-y: auto;
   max-height: calc(80vh - 2rem);
 }
@@ -1668,6 +1738,28 @@ progress {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
+}
+
+/* Squish modal specific styling */
+#squishModal .modal-content {
+  max-width: 500px;
+}
+
+#squishModal .modal-body {
+  padding: 1.5rem;
+  max-height: none;
+}
+
+#squishForm {
+  margin-bottom: 0.5rem;
+}
+
+#squishForm .form-group {
+  margin-bottom: 1rem;
+}
+
+#squishForm .form-submit {
+  margin-top: 0.5rem;
 }
 
 /* File browser styles */
@@ -1967,6 +2059,13 @@ progress {
   font-size: 1rem;
 }
 
+.transcode-title .show-title {
+  color: var(--secondary-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+
 .transcode-info {
   display: flex;
   flex-direction: column;
@@ -2050,8 +2149,8 @@ progress {
   animation: fade-in 0.5s ease-in;
 }
 
-/* Profile pill overlay */
-.profile-pill-overlay {
+/* Preset pill overlay */
+.preset-pill-overlay {
   position: absolute;
   top: 10px;
   left: 10px;
