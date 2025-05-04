@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Welcome to Squishy!{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/onboarding.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="onboarding-container">
+    <div class="onboarding-welcome">
+        <h1>Welcome to Squishy!</h1>
+        <p class="welcome-text">
+            Thank you for choosing Squishy - the simple way to transcode your media.
+            Let's get you set up with a few quick steps.
+        </p>
+        
+        <div class="mascot-container">
+            <img src="{{ url_for('static', filename='img/anvil-happy.png') }}" alt="Squishy Mascot" class="welcome-mascot">
+        </div>
+        
+        <div class="onboarding-actions">
+            <a href="{{ url_for('onboarding.step', step=1) }}" class="button">Start Setup</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

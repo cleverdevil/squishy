@@ -328,13 +328,14 @@ def validate_preset_config(preset_name, config, quiet=False):
         check_container=True
     )
 
-def detect_capabilities(quiet: bool = False) -> Dict[str, Any]:
+def detect_capabilities(ffmpeg_path: str = "ffmpeg", quiet: bool = False) -> Dict[str, Any]:
     """
     Detect hardware acceleration capabilities on the system.
 
     Tests for VAAPI hardware encoders by running small FFmpeg test commands.
 
     Args:
+        ffmpeg_path: Path to the ffmpeg executable
         quiet: If True, suppresses console output during detection
 
     Returns:
@@ -365,14 +366,15 @@ def detect_capabilities(quiet: bool = False) -> Dict[str, Any]:
             print(f"[✗] VAAPI device {device} does not exist.")
         return capabilities
 
+    # Use the provided ffmpeg path
     tests = {
         "h264_vaapi": (
-            f"ffmpeg -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
+            f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
             f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
             f"-c:v h264_vaapi -t 1 -f null -"
         ),
         "hevc_vaapi": (
-            f"ffmpeg -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
+            f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
             f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
             f"-c:v hevc_vaapi -t 1 -f null -"
         )

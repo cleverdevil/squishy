@@ -27,6 +27,7 @@ class Config:
     hw_capabilities: Optional[Dict[str, Any]] = None  # Hardware capabilities JSON data
     enabled_libraries: Dict[str, bool] = None  # Dictionary of library_id -> enabled status
     log_level: str = "INFO"  # Application log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    secret_key: Optional[str] = None  # Flask session secret key
     
     def __post_init__(self):
         """Ensure dictionaries are initialized."""
@@ -36,6 +37,40 @@ class Config:
             self.path_mappings = {}
         if self.enabled_libraries is None:
             self.enabled_libraries = {}
+
+
+def is_first_run(config_path: str = None) -> bool:
+    """
+    Determine if this is the first run of the application.
+    
+    A first run is considered to be when:
+    1. The config file doesn't exist, or
+    2. Neither Jellyfin nor Plex is configured in the config file
+    
+    Returns:
+        bool: True if this is the first run, False otherwise
+    """
+    if config_path is None:
+        config_path = os.environ.get("CONFIG_PATH", "./config/config.json")
+    
+    # If the config file doesn't exist, this is the first run
+    if not os.path.exists(config_path):
+        return True
+    
+    # If the config file exists, check if a media server is configured
+    try:
+        with open(config_path, "r") as f:
+            config_data = json.load(f)
+            
+        # Check if either Jellyfin or Plex is configured
+        has_jellyfin = config_data.get("jellyfin_url") and config_data.get("jellyfin_api_key")
+        has_plex = config_data.get("plex_url") and config_data.get("plex_token")
+        
+        # If neither is configured, this is still considered a first run
+        return not (has_jellyfin or has_plex)
+    except (json.JSONDecodeError, IOError):
+        # If the file exists but can't be read or parsed, consider it a first run
+        return True
 
 
 def load_config(config_path: str = None) -> Config:
@@ -157,6 +192,7 @@ def load_config(config_path: str = None) -> Config:
         hw_capabilities=config_data.get("hw_capabilities"),
         enabled_libraries=enabled_libraries,
         log_level=config_data.get("log_level", "INFO"),
+        secret_key=config_data.get("secret_key"),
     )
 
 
@@ -167,6 +203,12 @@ def save_config(config: Config, config_path: str = None) -> None:
     if config_path is None:
         config_path = os.environ.get("CONFIG_PATH", "./config/config.json")
 
+    # Generate a secret key if one doesn't exist
+    if not config.secret_key:
+        import secrets
+        config.secret_key = secrets.token_hex(32)
+        logging.info("Generated new Flask secret key")
+        
     config_data = {
         "media_path": config.media_path,
         "transcode_path": config.transcode_path,
@@ -180,6 +222,7 @@ def save_config(config: Config, config_path: str = None) -> None:
         "hw_capabilities": config.hw_capabilities,
         "enabled_libraries": config.enabled_libraries,
         "log_level": config.log_level,
+        "secret_key": config.secret_key,
     }
 
     # Only include one source configuration

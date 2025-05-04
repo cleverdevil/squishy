@@ -137,11 +137,14 @@ def transcode():
         return jsonify({"error": "Invalid preset"}), 400
     
     job = create_job(media_item, preset_name)
+    
+    # Use the transcode_path from the config object directly
+    # instead of relying on Flask's app.config
     start_transcode(
         job,
         media_item,
         preset_name,
-        current_app.config["TRANSCODE_PATH"],
+        config.transcode_path,
     )
     
     return jsonify({
@@ -307,3 +310,80 @@ def get_media_technical_info(media_id):
         print(f"DEBUG: Traceback: {traceback.format_exc()}")
         
         return jsonify({"error": f"Error getting technical info: {str(e)}"}), 500
+
+
+@api_bp.route("/stats", methods=["GET"])
+def get_media_stats():
+    """Get statistics about media in the library."""
+    from squishy.scanner import MEDIA, TV_SHOWS, MEDIA_LOCK, TV_SHOWS_LOCK
+    
+    # Use locks to safely access the dictionaries
+    with MEDIA_LOCK, TV_SHOWS_LOCK:
+        # Count movies and episodes
+        movies = [item for item in MEDIA.values() if item.type == "movie"]
+        episodes = [item for item in MEDIA.values() if item.type == "episode"]
+        
+        # Get unique shows
+        shows = list(TV_SHOWS.values())
+        
+        return jsonify({
+            "success": True,
+            "movies": len(movies),
+            "shows": len(shows),
+            "episodes": len(episodes),
+            "total_items": len(MEDIA)
+        })
+
+
+@api_bp.route("/files", methods=["GET"])
+def list_files():
+    """List files and directories for file browser."""
+    import os
+    
+    # Get path from query parameter
+    path = request.args.get("path", "/")
+    
+    # Default to root directory if path is not provided or invalid
+    if not path or not os.path.exists(path):
+        path = "/"
+    
+    try:
+        # Get directories and files in the path
+        entries = os.listdir(path)
+        
+        # Split into directories and files
+        directories = []
+        files = []
+        
+        for entry in sorted(entries):
+            full_path = os.path.join(path, entry)
+            
+            # Skip hidden files
+            if entry.startswith("."):
+                continue
+                
+            try:
+                if os.path.isdir(full_path):
+                    directories.append(entry)
+                else:
+                    files.append(entry)
+            except (PermissionError, OSError):
+                # Skip entries we don't have permission to access
+                continue
+        
+        return jsonify({
+            "success": True,
+            "path": path,
+            "directories": directories,
+            "files": files
+        })
+    except PermissionError:
+        return jsonify({
+            "success": False,
+            "message": "Permission denied"
+        }), 403
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500

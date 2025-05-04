@@ -1,0 +1,79 @@
+{% extends 'onboarding/wizard_base.html' %}
+
+{% block title %}Squishy Setup - Library Scan{% endblock %}
+
+{% block wizard_title %}Media Library Scan{% endblock %}
+
+{% set current_step = 4 %}
+
+{% block wizard_content %}
+<div class="step-description">
+    <p>
+        Now let's scan your media server to find available media files. This will help Squishy find your content
+        and prepare it for transcoding.
+    </p>
+</div>
+
+<div class="step-form scan-step">
+    <div class="scan-container">
+        <div class="scan-start" id="scanStartSection">
+            <p>Click the button below to start scanning your media libraries.</p>
+            <div class="scan-actions">
+                <button type="button" id="startScanButton" class="button primary">Start Scan</button>
+            </div>
+        </div>
+
+        <div class="scan-progress" id="scanProgressSection" style="display: none;">
+            <div class="spinner centered"></div>
+            <p id="scanStatusText">Scanning media libraries...</p>
+        </div>
+
+        <div class="scan-results" id="scanResultsSection" style="display: none;">
+            <div class="scan-success" id="scanSuccessSection" style="display: none;">
+                <div class="success-icon">✓</div>
+                <h3>Scan Completed Successfully!</h3>
+                <p>Your media has been found and added to Squishy.</p>
+                <div class="scan-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Movies:</span>
+                        <span class="stat-value" id="movieCount">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">TV Shows:</span>
+                        <span class="stat-value" id="showCount">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Episodes:</span>
+                        <span class="stat-value" id="episodeCount">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="scan-error" id="scanErrorSection" style="display: none;">
+                <div class="error-icon">⚠️</div>
+                <h3>Scan Issue</h3>
+                <p id="scanErrorText">No media was found during the scan. This could be due to:</p>
+                <ul>
+                    <li>Incorrect path mappings</li>
+                    <li>No accessible media in the selected libraries</li>
+                    <li>Media server connection issues</li>
+                </ul>
+                <p>You can try to fix the paths in the previous step, or continue without scanning.</p>
+                <div class="error-actions">
+                    <a href="{{ url_for('onboarding.step', step=3) }}" class="button secondary">Back to Path Configuration</a>
+                    <a href="{{ url_for('onboarding.step', step=5) }}" class="button primary">Continue Anyway</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form action="{{ url_for('onboarding.skip_scan') }}" method="post" id="skipScanForm" style="display: none;">
+        <!-- Empty form for skipping scan -->
+    </form>
+</div>
+{% endblock %}
+
+{% block wizard_actions %}
+<button type="button" id="skipScanButton" class="button secondary">Skip Scan</button>
+<button type="button" id="continueAfterScanButton" class="button primary" style="display: none;">Continue</button>
+{% endblock %}

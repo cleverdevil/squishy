@@ -14,7 +14,7 @@ from flask import (
 
 from squishy.config import load_config
 from squishy.scanner import get_all_media, get_media, get_shows_and_movies, get_show
-from squishy.transcoder import create_job, get_job, start_transcode
+from squishy.transcoder import create_job, get_job, start_transcode, apply_output_path_mapping
 from squishy.completed import get_completed_transcodes, delete_transcode
 from squishy.media_info import get_media_info, format_file_size
 
@@ -264,8 +264,10 @@ def remove_job(job_id):
 @ui_bp.route("/completed")
 def completed():
     """Display completed transcodes."""
+    # Load config to get transcode path
+    config = load_config()
     completed_transcodes = get_completed_transcodes(
-        current_app.config["TRANSCODE_PATH"]
+        config.transcode_path
     )
 
     # Helper function to format file size
@@ -305,7 +307,13 @@ def completed():
 @ui_bp.route("/download/<filename>")
 def download_file(filename):
     """Serve a file for download."""
-    transcode_path = current_app.config["TRANSCODE_PATH"]
+    # Load config to get transcode path
+    config = load_config()
+    transcode_path = config.transcode_path
+    
+    # Apply path mappings to transcode_path
+    transcode_path = apply_output_path_mapping(transcode_path)
+    
     file_path = os.path.join(transcode_path, filename)
 
     # Verify the file exists and is within transcode_path
@@ -349,7 +357,9 @@ def download_episode(media_id):
 @ui_bp.route("/completed/delete/<filename>", methods=["POST"])
 def delete_completed_transcode(filename):
     """Delete a completed transcode and its metadata file."""
-    transcode_path = current_app.config["TRANSCODE_PATH"]
+    # Load config to get transcode path
+    config = load_config()
+    transcode_path = config.transcode_path
 
     # Call the delete function from the completed module
     success, message = delete_transcode(filename, transcode_path)

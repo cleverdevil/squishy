@@ -1,0 +1,111 @@
+{% extends 'onboarding/wizard_base.html' %}
+
+{% block title %}Squishy Setup - Transcoding Presets{% endblock %}
+
+{% block wizard_title %}Transcoding Presets{% endblock %}
+
+{% set current_step = 5 %}
+
+{% block wizard_content %}
+<div class="step-description">
+    <p>
+        Choose which transcoding presets you want to use with Squishy. These presets will determine 
+        the quality and format of your transcoded (squished) videos.
+    </p>
+</div>
+
+<div class="step-form">
+    <form action="{{ url_for('onboarding.save_presets') }}" method="post" id="presetsForm">
+        <div class="presets-options">
+            <div class="preset-option">
+                <div class="preset-option-header">
+                    <input type="radio" id="preset-quality" name="preset_type" value="quality" checked>
+                    <label for="preset-quality" class="preset-title">Quality-Focused Presets</label>
+                </div>
+                <div class="preset-details">
+                    <div class="preset-description">
+                        <p>
+                            These presets focus on excellent video quality while achieving good compression.
+                            They use the HEVC (H.265) codec with CRF-based quality settings, resulting in efficient
+                            file sizes with minimal quality loss.
+                        </p>
+                    </div>
+                    <div class="preset-features">
+                        <h4>Features:</h4>
+                        <ul>
+                            <li>HEVC (H.265) video codec</li>
+                            <li>Quality-based CRF encoding</li>
+                            <li>MKV container format</li>
+                            <li>Excellent quality/size ratio</li>
+                            <li>Hardware acceleration support</li>
+                            <li>May not be compatible with all devices</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="preset-option">
+                <div class="preset-option-header">
+                    <input type="radio" id="preset-compatible" name="preset_type" value="compatible">
+                    <label for="preset-compatible" class="preset-title">Compatibility-Focused Presets</label>
+                </div>
+                <div class="preset-details">
+                    <div class="preset-description">
+                        <p>
+                            These presets focus on maximum compatibility across devices.
+                            They use the H.264 codec with MP4 container, ensuring your videos
+                            will play on almost any device, including older TVs, phones, and tablets.
+                        </p>
+                    </div>
+                    <div class="preset-features">
+                        <h4>Features:</h4>
+                        <ul>
+                            <li>H.264 video codec</li>
+                            <li>Bitrate-based encoding</li>
+                            <li>MP4 container format</li>
+                            <li>Wider device compatibility</li>
+                            <li>Hardware acceleration support</li>
+                            <li>Larger file sizes than HEVC</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="preset-option">
+                <div class="preset-option-header">
+                    <input type="radio" id="preset-default" name="preset_type" value="default">
+                    <label for="preset-default" class="preset-title">Squishy Default Presets</label>
+                </div>
+                <div class="preset-details">
+                    <div class="preset-description">
+                        <p>
+                            These are the default presets that come with Squishy.
+                            They offer a balanced approach with HEVC encoding and quality-based settings.
+                        </p>
+                    </div>
+                    <div class="preset-features">
+                        <h4>Features:</h4>
+                        <ul>
+                            <li>HEVC (H.265) video codec</li>
+                            <li>Quality-based CRF encoding</li>
+                            <li>MKV container format</li>
+                            <li>Three quality levels: high, medium, low</li>
+                            <li>Hardware acceleration support</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="presets-note">
+            <p>
+                <strong>Note:</strong> You can always customize and add more presets later from the Admin Dashboard.
+            </p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block wizard_actions %}
+<button type="submit" form="presetsForm" class="button primary">Continue</button>
+{% endblock %}

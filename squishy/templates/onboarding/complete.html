@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Setup Complete - Squishy{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+<meta http-equiv="refresh" content="5;url={{ url_for('ui.index') }}">
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Redirect to home page after countdown
+    document.addEventListener('DOMContentLoaded', function() {
+        let countdown = 5;
+        const countdownElement = document.getElementById('redirect-countdown');
+        
+        if (countdownElement) {
+            const interval = setInterval(function() {
+                countdown--;
+                countdownElement.textContent = countdown;
+                
+                if (countdown <= 0) {
+                    clearInterval(interval);
+                    window.location.href = "{{ url_for('ui.index') }}";
+                }
+            }, 1000);
+        }
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="completion-container">
+    <div class="completion-content">
+        <div class="completion-header">
+            <h1>Setup Complete!</h1>
+        </div>
+        
+        <div class="completion-message">
+            <div class="mascot-container">
+                <img src="{{ url_for('static', filename='img/anvil-happy-2.png') }}" alt="Squishy Mascot" class="completion-mascot">
+            </div>
+            
+            <p class="success-message">
+                Congratulations! You've successfully set up Squishy.
+            </p>
+            
+            <p class="next-steps">
+                You'll be redirected to the home page in <span id="redirect-countdown">5</span> seconds.
+            </p>
+        </div>
+        
+        <div class="completion-info">
+            <h2>What's Next?</h2>
+            <ul>
+                <li>Browse your media library</li>
+                <li>Select items to transcode (squish)</li>
+                <li>Monitor transcoding jobs in the Jobs tab</li>
+                <li>Find completed transcodes in the Completed tab</li>
+                <li>Adjust settings in the Admin panel anytime</li>
+            </ul>
+        </div>
+        
+        <div class="completion-actions">
+            <a href="{{ url_for('ui.index') }}" class="button primary">Go to Home Page</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

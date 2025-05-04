@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/onboarding.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="onboarding-container">
+    <div class="onboarding-header">
+        <h1>{% block wizard_title %}Squishy Setup{% endblock %}</h1>
+    </div>
+    
+    <div class="wizard-progress">
+        <div class="progress-steps">
+            <div class="step {% if current_step >= 1 %}active{% endif %} {% if current_step > 1 %}completed{% endif %}">
+                <div class="step-number">1</div>
+                <div class="step-label">Media Source</div>
+            </div>
+            <div class="step {% if current_step >= 2 %}active{% endif %} {% if current_step > 2 %}completed{% endif %}">
+                <div class="step-number">2</div>
+                <div class="step-label">Libraries</div>
+            </div>
+            <div class="step {% if current_step >= 3 %}active{% endif %} {% if current_step > 3 %}completed{% endif %}">
+                <div class="step-number">3</div>
+                <div class="step-label">Paths</div>
+            </div>
+            <div class="step {% if current_step >= 4 %}active{% endif %} {% if current_step > 4 %}completed{% endif %}">
+                <div class="step-number">4</div>
+                <div class="step-label">Scan</div>
+            </div>
+            <div class="step {% if current_step >= 5 %}active{% endif %} {% if current_step > 5 %}completed{% endif %}">
+                <div class="step-number">5</div>
+                <div class="step-label">Presets</div>
+            </div>
+            <div class="step {% if current_step >= 6 %}active{% endif %} {% if current_step > 6 %}completed{% endif %}">
+                <div class="step-number">6</div>
+                <div class="step-label">Hardware</div>
+            </div>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-indicator" style="width: {{ (current_step - 1) * 20 }}%"></div>
+        </div>
+    </div>
+    
+    <div class="wizard-content">
+        {% block wizard_content %}{% endblock %}
+    </div>
+    
+    <div class="wizard-footer">
+        {% if current_step > 1 %}
+        <a href="{{ url_for('onboarding.step', step=current_step-1) }}" class="button secondary">Back</a>
+        {% endif %}
+        
+        {% block wizard_actions %}
+        <a href="{{ url_for('onboarding.step', step=current_step+1) }}" class="button primary">Continue</a>
+        {% endblock %}
+    </div>
+</div>
+{% endblock %}

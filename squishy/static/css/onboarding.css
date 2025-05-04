@@ -1,0 +1,716 @@
+/*
+ * Squishy Onboarding Styles
+ * =========================
+ * Styles for the onboarding wizard process
+ */
+
+/* ========================================================================== */
+/* General Onboarding Styles
+/* ========================================================================== */
+
+.onboarding-container {
+  max-width: 1000px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.onboarding-header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+}
+
+/* ========================================================================== */
+/* Welcome Screen
+/* ========================================================================== */
+
+.onboarding-welcome {
+  text-align: center;
+  padding: 3rem 1rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.onboarding-welcome h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.welcome-text {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mascot-container {
+  margin: 2rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.welcome-mascot {
+  max-height: 200px;
+  filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.2));
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.onboarding-actions {
+  margin-top: 2rem;
+}
+
+.onboarding-actions .button {
+  padding: 0.8rem 2.5rem;
+  font-size: 1.2rem;
+  transition: transform 0.2s ease;
+}
+
+.onboarding-actions .button:hover {
+  transform: scale(1.05);
+}
+
+/* ========================================================================== */
+/* Progress Indicator
+/* ========================================================================== */
+
+.wizard-progress {
+  margin-bottom: 2rem;
+}
+
+.progress-steps {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  position: relative;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.step.active, .step.completed {
+  opacity: 1;
+}
+
+.step-number {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: var(--dark-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  position: relative;
+  z-index: 2;
+}
+
+.step.completed .step-number {
+  background-color: var(--success-color);
+}
+
+.step-label {
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.progress-bar {
+  height: 4px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+
+/* ========================================================================== */
+/* Wizard Content
+/* ========================================================================== */
+
+.wizard-content {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.step-description {
+  margin-bottom: 2rem;
+}
+
+.step-description p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.step-form {
+  margin-bottom: 1rem;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
+}
+
+/* ========================================================================== */
+/* Media Source Step (Step 1)
+/* ========================================================================== */
+
+.radio-card {
+  display: block;
+  margin-bottom: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.radio-card:hover {
+  border-color: var(--secondary-color);
+  background-color: rgba(20, 176, 161, 0.05);
+}
+
+.radio-card.selected {
+  border-color: var(--secondary-color);
+  background-color: rgba(20, 176, 161, 0.1);
+}
+
+.radio-card input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+}
+
+.radio-card-content {
+  display: flex;
+  align-items: center;
+}
+
+.radio-card-icon {
+  margin-right: 1rem;
+}
+
+.radio-card-icon img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.radio-card-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.radio-card-label strong {
+  font-size: 1.1rem;
+  margin-bottom: 0.2rem;
+}
+
+.radio-card-label span {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.source-fields {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #eee;
+}
+
+/* ========================================================================== */
+/* Media Libraries Step (Step 2)
+/* ========================================================================== */
+
+.libraries-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.library-actions {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.library-item {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.library-item:last-child {
+  border-bottom: none;
+}
+
+.library-item input[type="checkbox"] {
+  margin-right: 1rem;
+}
+
+.no-libraries-warning {
+  margin-top: 2rem;
+  text-align: center;
+  padding: 2rem;
+  background-color: #fff9e0;
+  border-radius: 8px;
+  border: 1px solid #ffe066;
+}
+
+.warning-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+/* ========================================================================== */
+/* Path Configuration Step (Step 3)
+/* ========================================================================== */
+
+.path-mapping-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.mapping-fields {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+}
+
+.mapping-fields .form-group {
+  flex: 1;
+}
+
+.mapping-actions {
+  padding-top: 1.5rem;
+  margin-left: 1rem;
+}
+
+.path-mapping-empty {
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  text-align: center;
+  color: #666;
+}
+
+/* File browser modal */
+.directory-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+
+.directory-item {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.directory-item:hover {
+  background-color: #f5f5f5;
+}
+
+.directory-item:last-child {
+  border-bottom: none;
+}
+
+.directory-icon {
+  margin-right: 0.8rem;
+  color: #666;
+}
+
+.directory-name {
+  flex: 1;
+}
+
+.current-path {
+  background-color: #f5f5f5;
+  padding: 0.8rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+/* ========================================================================== */
+/* Library Scan Step (Step 4)
+/* ========================================================================== */
+
+.scan-container {
+  margin: 0 auto;
+  max-width: 700px;
+}
+
+.scan-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+}
+
+.spinner {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 202, 28, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 1.5rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.scan-results {
+  padding: 2rem;
+}
+
+.scan-success, .scan-error {
+  text-align: center;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+.scan-success {
+  background-color: transparent;
+  border: 1px solid #ddd;
+}
+
+.scan-error {
+  background-color: #fff0f0;
+  border: 1px solid #ffaaaa;
+}
+
+.success-icon {
+  color: var(--success-color);
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-icon {
+  color: var(--error-color);
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.scan-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: var(--secondary-color);
+}
+
+.error-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+/* ========================================================================== */
+/* Transcoding Presets Step (Step 5)
+/* ========================================================================== */
+
+.presets-options {
+  margin-bottom: 2rem;
+}
+
+.preset-option {
+  margin-bottom: 1.5rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.preset-option:hover {
+  border-color: var(--secondary-color);
+}
+
+.preset-option.selected {
+  border-color: var(--secondary-color);
+  background-color: rgba(20, 176, 161, 0.05);
+}
+
+.preset-option-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  background-color: #f5f5f5;
+}
+
+.preset-option.selected .preset-option-header {
+  background-color: rgba(20, 176, 161, 0.1);
+}
+
+.preset-option-header input[type="radio"] {
+  margin-right: 1rem;
+}
+
+.preset-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  flex: 1;
+}
+
+.preset-details {
+  padding: 1.5rem;
+  display: flex;
+}
+
+.preset-description {
+  flex: 1;
+  padding-right: 1.5rem;
+}
+
+.preset-features {
+  flex: 1;
+}
+
+.preset-features h4 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+}
+
+.preset-features ul {
+  padding-left: 1.5rem;
+  margin: 0;
+}
+
+.preset-features li {
+  margin-bottom: 0.5rem;
+}
+
+.presets-note {
+  background-color: #f9f9f9;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+/* ========================================================================== */
+/* Hardware Acceleration Step (Step 6)
+/* ========================================================================== */
+
+.hwaccel-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hwaccel-detection {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.detection-actions {
+  margin-top: 1.5rem;
+}
+
+.detection-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 2rem 0;
+}
+
+.hwaccel-results {
+  margin-top: 2rem;
+}
+
+.hwaccel-results h3 {
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #eee;
+}
+
+.success-message, .warning-message {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.success-message {
+  background-color: #f0ffe0;
+  border: 1px solid #aadd77;
+}
+
+.warning-message {
+  background-color: #fff9e0;
+  border: 1px solid #ffe066;
+}
+
+.success-message .success-icon,
+.warning-message .warning-icon {
+  font-size: 1.5rem;
+  margin-right: 1rem;
+}
+
+.capabilities-details {
+  margin-top: 1.5rem;
+}
+
+.capabilities-info {
+  margin-bottom: 1.5rem;
+}
+
+.capability-item {
+  display: flex;
+  margin-bottom: 0.8rem;
+}
+
+.capability-label {
+  font-weight: bold;
+  width: 150px;
+}
+
+.capabilities-json {
+  margin-top: 1.5rem;
+}
+
+.capabilities-actions {
+  margin-top: 1rem;
+}
+
+.advanced-note {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.fallback-message {
+  margin-top: 1.5rem;
+  background-color: #f9f9f9;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+/* ========================================================================== */
+/* Completion Screen
+/* ========================================================================== */
+
+.completion-container {
+  max-width: 800px;
+  margin: 3rem auto;
+  padding: 0 1rem;
+}
+
+.completion-content {
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.completion-header {
+  margin-bottom: 2rem;
+}
+
+.completion-header h1 {
+  font-size: 2.5rem;
+  color: var(--success-color);
+}
+
+.completion-message {
+  margin-bottom: 2rem;
+}
+
+.completion-mascot {
+  max-height: 180px;
+  margin-bottom: 2rem;
+  filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.1));
+  animation: bounce 2s ease-in-out infinite;
+}
+
+.success-message {
+  font-size: 1.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.next-steps {
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.completion-info {
+  margin: 2rem auto;
+  max-width: 500px;
+  text-align: left;
+}
+
+.completion-info h2 {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.completion-info ul {
+  padding-left: 1.5rem;
+}
+
+.completion-info li {
+  margin-bottom: 0.8rem;
+}
+
+.completion-actions {
+  margin-top: 2rem;
+}
+
+.completion-actions .button {
+  padding: 0.8rem 2rem;
+  font-size: 1.1rem;
+}

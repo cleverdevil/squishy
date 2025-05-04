@@ -1,0 +1,96 @@
+{% extends 'onboarding/wizard_base.html' %}
+
+{% block title %}Squishy Setup - Hardware Acceleration{% endblock %}
+
+{% block wizard_title %}Hardware Acceleration{% endblock %}
+
+{% set current_step = 6 %}
+
+{% block wizard_content %}
+<div class="step-description">
+    <p>
+        Hardware acceleration can significantly speed up transcoding by using your system's GPU
+        instead of the CPU. Let's detect what hardware acceleration capabilities your system has.
+    </p>
+</div>
+
+<div class="step-form">
+    <div class="hwaccel-container">
+        <div class="hwaccel-detection">
+            <p>Click the button below to detect hardware acceleration capabilities on your system.</p>
+            
+            <div class="detection-actions">
+                <button type="button" id="detectHardwareBtn" class="button primary">Detect Hardware Capabilities</button>
+            </div>
+            
+            <div id="detection-progress" class="detection-progress" style="display: none;">
+                <div class="spinner"></div>
+                <p>Detecting hardware capabilities...</p>
+            </div>
+        </div>
+        
+        <div class="hwaccel-results" id="hwaccel-results" style="display: none;">
+            <h3>Hardware Capabilities</h3>
+            
+            <div id="hwaccel-available" style="display: none;">
+                <div class="success-message">
+                    <div class="success-icon">✓</div>
+                    <p>Hardware acceleration is available on your system!</p>
+                </div>
+                
+                <div class="capabilities-details">
+                    <p class="help-text">These hardware acceleration capabilities have been detected and will be used for transcoding.</p>
+                    
+                    <div class="capabilities-info">
+                        <div class="capability-item">
+                            <span class="capability-label">Acceleration Type:</span>
+                            <span class="capability-value" id="hwaccel-type">-</span>
+                        </div>
+                        <div class="capability-item">
+                            <span class="capability-label">Available Encoders:</span>
+                            <span class="capability-value" id="hwaccel-encoders">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="capabilities-json">
+                        <textarea id="capabilities-json-content" rows="8" style="width: 100%; font-family: monospace; font-size: 0.9rem;" readonly></textarea>
+                        
+                        <div class="capabilities-actions">
+                            <button type="button" id="edit-capabilities-button" class="button">Enable Editing</button>
+                            <button type="button" id="save-capabilities-button" class="button success" style="margin-left: 10px; display: none;">Save Capabilities</button>
+                        </div>
+                        
+                        <p class="advanced-note">
+                            <strong>Note:</strong> Manual editing is for advanced users only. The detected capabilities
+                            are generally correct and shouldn't need modification.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="hwaccel-unavailable" style="display: none;">
+                <div class="warning-message">
+                    <div class="warning-icon">⚠️</div>
+                    <p>No hardware acceleration was detected on your system.</p>
+                </div>
+                
+                <div class="fallback-message">
+                    <p>
+                        Squishy will use software-based encoding, which is slower but produces the same quality results.
+                        If you believe your system should have hardware acceleration, you can check our 
+                        <a href="https://github.com/cleverdevil/squishy">documentation</a> for troubleshooting tips.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <form action="{{ url_for('onboarding.complete') }}" method="post" id="completeForm">
+            <!-- Empty form for completing the wizard -->
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block wizard_actions %}
+<button type="submit" form="completeForm" class="button primary">Finish Setup</button>
+{% endblock %}

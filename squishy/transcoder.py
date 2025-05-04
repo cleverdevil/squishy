@@ -15,7 +15,7 @@ from typing import Dict, Optional, List, Callable, Any
 from squishy.config import load_config
 from squishy.models import TranscodeJob, MediaItem, Movie, Episode
 from squishy.scanner import get_media
-from squishy.effeffmpeg import transcode as effeff_transcode, detect_capabilities, TranscodeProcess
+from squishy.effeffmpeg.effeffmpeg import transcode as effeff_transcode, detect_capabilities, TranscodeProcess
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -93,21 +93,21 @@ def process_job_queue():
 
     # First handle jobs in the JOB_QUEUE
     jobs_to_process = []  # Initialize outside the conditional to avoid UnboundLocalError
-    
+
     if available_slots > 0:
         with JOB_QUEUE_LOCK:
             if JOB_QUEUE:
                 logger.debug(f"Starting up to {available_slots} jobs from queue")
                 # Get the next job(s) from the queue
                 jobs_to_start = min(available_slots, len(JOB_QUEUE))
-                
+
                 # Get jobs from queue while holding the lock
                 for _ in range(jobs_to_start):
                     if not JOB_QUEUE:
                         break
                     # Pop job data from the queue
                     jobs_to_process.append(JOB_QUEUE.pop(0))
-        
+
         # Process jobs outside the lock to avoid holding it for too long
         for job_data in jobs_to_process:
             job_id = job_data["job_id"]
@@ -180,9 +180,9 @@ def start_transcode(
     logger.debug(
         f"Starting transcode job={job.id} for media={media_item.id}, preset={preset_name}"
     )
-    
+
     config = load_config()
-    
+
     if preset_name in config.presets:
         preset = config.presets[preset_name]
         logger.debug(
@@ -213,7 +213,7 @@ def start_transcode(
                 }
             )
             queue_position = len(JOB_QUEUE)
-            
+
         logger.debug(f"Queued job {job.id}, position in queue: {queue_position}")
 
 
@@ -294,12 +294,20 @@ def transcode(
         # Update status with thread safety
         job.update_status("processing")
         logger.debug(f"Job {job.id} status changed to processing")
+        
+        # Apply path mappings to the output directory
+        # This ensures we use the correct path for transcodes, especially in Docker
+        original_output_dir = output_dir
+        output_dir = apply_output_path_mapping(output_dir)
+        
+        if original_output_dir != output_dir:
+            logger.info(f"Output directory mapped from {original_output_dir} to {output_dir}")
 
         # Get the preset from config
         config = load_config()
         if preset_name not in config.presets:
             raise ValueError(f"Preset '{preset_name}' not found in configuration")
-            
+
         preset = config.presets[preset_name]
 
         # Get original filename without extension
@@ -368,14 +376,14 @@ def transcode(
         # Get hardware acceleration settings from config
         hw_accel = config.hw_accel
         hw_device = config.hw_device
-        
+
         # Override force_software if hw_accel is set to none
         if hw_accel and hw_accel.lower() == "none":
             preset["force_software"] = True
 
         # Run the effeffmpeg transcoding
         logger.info(f"Starting transcode for job {job.id} using effeffmpeg")
-        
+
         try:
             # Generate the command first with dry_run to log it
             command = effeff_transcode(
@@ -385,7 +393,7 @@ def transcode(
                 overwrite=True,
                 presets_data={"preset": preset}  # Wrap the preset in a dict as expected by effeffmpeg
             )
-            
+
             # Store the command in the job
             cmd_str = " ".join(command)
             job.ffmpeg_command = cmd_str
@@ -401,7 +409,7 @@ def transcode(
                 preset_name="preset",  # Use the preset name
                 presets_data={"preset": preset}  # Pass the preset data directly
             )
-            
+
             # Store the process ID for potential cancellation
             if hasattr(process, "process") and process.process:
                 job.process_id = process.process.pid
@@ -413,18 +421,18 @@ def transcode(
                 # Check if job has been cancelled
                 with job._lock:
                     is_cancelled = job.status == "cancelled"
-                
+
                 if is_cancelled:
                     logger.info(f"Job {job.id} has been cancelled, terminating process")
                     process.terminate()
                     cancelled = True
                     break
-                
+
                 # Update output file size
                 if os.path.exists(output_path):
                     output_size = os.path.getsize(output_path)
                     job.update_output_size(format_file_size(output_size))
-                
+
                 # Use process.poll() instead of wait with timeout to check if it's still running
                 # This avoids the TimeoutExpired exception when using eventlet's patched subprocess
                 if process.process.poll() is not None:
@@ -432,7 +440,7 @@ def transcode(
                     process.finished = True
                     process.returncode = process.process.returncode
                     break
-                    
+
                 # Sleep for a short time
                 time.sleep(0.5)
 
@@ -448,7 +456,7 @@ def transcode(
 
             # Update job status
             job.update_status("completed")
-            
+
             # Update progress and output path
             with job._lock:
                 job.progress = 1.0
@@ -505,7 +513,7 @@ def transcode(
                 metadata["show_id"] = media_item.show_id
                 metadata["season_number"] = media_item.season_number
                 metadata["episode_number"] = media_item.episode_number
-                
+
                 # Add show title to the metadata
                 from squishy.scanner import get_show
                 show = get_show(media_item.show_id)
@@ -524,10 +532,10 @@ def transcode(
 
     except Exception as e:
         logger.error(f"Transcoding job {job.id} failed: {str(e)}", exc_info=True)
-        
+
         # Update job status with thread safety
         job.update_status("failed")
-        
+
         # Update error message with thread safety
         with job._lock:
             job.error_message = str(e)
@@ -535,16 +543,16 @@ def transcode(
         # Make sure to capture final error messages in logs
         if hasattr(e, "stderr") and e.stderr:
             error_lines = []
-            
+
             # Get current logs
             with job._lock:
                 error_lines = list(job.ffmpeg_logs)
-                
+
             # Add error lines
             for line in e.stderr.splitlines():
                 if line.strip():
                     error_lines.append(f"STDERR: {line.strip()}")
-            
+
             # Update logs
             job.update_logs(error_lines)
 
@@ -553,23 +561,23 @@ def get_media_duration(input_path: str) -> Optional[float]:
     """Get the duration of a media file in seconds using effeffmpeg."""
     try:
         # Run ffprobe to get duration
-        ffprobe_cmd = ["ffprobe", "-v", "error", "-show_entries", 
-                      "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", 
+        ffprobe_cmd = ["ffprobe", "-v", "error", "-show_entries",
+                      "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
                       input_path]
-        
+
         result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
-        
+
         if result.returncode == 0 and result.stdout.strip():
             try:
                 # ffprobe returns duration in seconds as a float
                 return float(result.stdout.strip())
             except (ValueError, TypeError) as e:
                 logger.error(f"Error parsing ffprobe duration: {e}")
-        
+
         # Fall back to regex parsing if ffprobe doesn't return a clean duration
         ffmpeg_cmd = ["ffmpeg", "-i", input_path]
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-        
+
         # Look for duration in the output
         duration_match = re.search(
             r"Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})", result.stderr
@@ -588,6 +596,41 @@ def get_media_duration(input_path: str) -> Optional[float]:
         logger.error(f"Error getting media duration: {str(e)}")
         return None
 
+
+def apply_output_path_mapping(path: str) -> str:
+    """
+    Apply path mapping to output directory if needed.
+    
+    This handles cases where the config.transcode_path may need to be 
+    mapped to a different location (like in Docker environments).
+    """
+    config = load_config()
+    
+    # Print detailed debug information
+    logger.debug(f"apply_output_path_mapping: Input path: {path}")
+    logger.debug(f"apply_output_path_mapping: Path mappings: {config.path_mappings}")
+    
+    if not config.path_mappings:
+        logger.debug("apply_output_path_mapping: No path mappings defined, returning original path")
+        return path
+        
+    # Check if the transcode path is directly in the path mappings
+    for source_path, target_path in config.path_mappings.items():
+        if path == source_path:
+            logger.info(f"Mapping output path: {path} -> {target_path}")
+            return target_path
+    
+    # If path doesn't exist but a mapping target does, use that
+    if not os.path.exists(path):
+        logger.debug(f"apply_output_path_mapping: Path {path} does not exist, checking for accessible alternatives")
+        for source_path, target_path in config.path_mappings.items():
+            # Check if the target path exists and matches our transcode path pattern
+            if os.path.exists(target_path) and (target_path.endswith('/transcodes') or target_path == '/transcodes'):
+                logger.info(f"Using accessible output path mapping: {path} -> {target_path}")
+                return target_path
+    
+    logger.debug(f"apply_output_path_mapping: No mapping found, using original path: {path}")
+    return path
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size in a human-readable way."""
@@ -629,15 +672,16 @@ def get_process_status(pid: int) -> Optional[str]:
 def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
     """Detect available hardware acceleration methods using effeffmpeg."""
     config = load_config()
-    
+
     # Check if we have hw_capabilities in config
     if config.hw_capabilities:
         capabilities = config.hw_capabilities
         logger.info("Using hardware capabilities from config")
     else:
-        # Use effeffmpeg's detect_capabilities
-        capabilities = detect_capabilities()
-    
+        # Use effeffmpeg's detect_capabilities with the provided ffmpeg_path
+        logger.info(f"Detecting hardware capabilities using FFmpeg at: {ffmpeg_path}")
+        capabilities = detect_capabilities(ffmpeg_path=ffmpeg_path)
+
     # Format the results to match the expected output format in the admin UI
     result = {
         "methods": [],
@@ -653,31 +697,31 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
         },
         "recommended": {"method": "", "device": ""},
     }
-    
+
     # Add detected methods
     hwaccel = capabilities.get("hwaccel")
     if hwaccel:
         result["methods"].append(hwaccel)
-        
+
     # Add detected encoders as methods
     for codec, encoder in capabilities.get("encoders", {}).items():
         method = encoder.split('_')[1] if '_' in encoder else encoder
         if method not in result["methods"]:
             result["methods"].append(method)
-    
+
     # Add detected devices
     device = capabilities.get("device")
     if device and hwaccel == "vaapi":
         result["devices"]["vaapi"].append({"path": device})
-    
+
     # Set recommended method and device
     if hwaccel:
         result["recommended"]["method"] = hwaccel
         result["recommended"]["device"] = device
-    
+
     logger.info(f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}")
     logger.info(f"Recommended method: {result['recommended']['method'] or 'None'}")
-    
+
     return result
 
 
@@ -696,12 +740,12 @@ def cancel_job(job_id: str) -> bool:
     is_pending = False
     with job._lock:
         is_pending = job.status == "pending"
-        
+
     if is_pending:
         # Check if job is in the queue with thread safety
         job_found = False
         job_index = -1
-        
+
         with JOB_QUEUE_LOCK:
             for i, queued_job in enumerate(JOB_QUEUE):
                 if queued_job["job_id"] == job_id:
@@ -709,11 +753,11 @@ def cancel_job(job_id: str) -> bool:
                     job_index = i
                     job_found = True
                     break
-                    
+
             # Remove from queue if found (still inside the lock)
             if job_index >= 0:
                 JOB_QUEUE.pop(job_index)
-        
+
         # Update job status if found in queue
         if job_found:
             job.update_status("cancelled")
@@ -732,7 +776,7 @@ def cancel_job(job_id: str) -> bool:
     process_id = None
     with job._lock:
         process_id = job.process_id
-        
+
     if process_id:
         try:
             os.kill(process_id, signal.SIGTERM)
@@ -764,7 +808,7 @@ def remove_job(job_id: str) -> bool:
     with job._lock:
         job_status = job.status
         is_removable = job_status in ["completed", "failed", "cancelled"]
-    
+
     if not is_removable:
         logger.warning(f"Attempted to remove job {job_id} with status {job_status}")
         return False

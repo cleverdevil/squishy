@@ -7,8 +7,13 @@ import logging
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 
+from squishy.transcoder import apply_output_path_mapping
+
 def get_completed_transcodes(transcode_path: str) -> List[Dict[str, Any]]:
     """Get all completed transcodes with metadata."""
+    # Apply path mappings to transcode_path
+    transcode_path = apply_output_path_mapping(transcode_path)
+    
     # Find all JSON sidecar files
     sidecar_files = glob.glob(os.path.join(transcode_path, "*.json"))
 
@@ -57,6 +62,9 @@ def delete_transcode(filename: str, transcode_path: str) -> Tuple[bool, str]:
     Returns:
         Tuple of (success, message)
     """
+    # Apply path mappings to transcode_path
+    transcode_path = apply_output_path_mapping(transcode_path)
+    
     # Full paths to the files
     file_path = os.path.join(transcode_path, filename)
     sidecar_path = file_path + ".json"

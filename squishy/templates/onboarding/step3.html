@@ -1,0 +1,133 @@
+{% extends 'onboarding/wizard_base.html' %}
+
+{% block title %}Squishy Setup - Path Configuration{% endblock %}
+
+{% block wizard_title %}Path Configuration{% endblock %}
+
+{% set current_step = 3 %}
+
+{% block wizard_content %}
+<div class="step-description">
+    <p>
+        Now let's configure the file paths that Squishy will use to access your media.
+        These paths are important for Squishy to properly find and process your files.
+    </p>
+</div>
+
+<div class="step-form">
+    <form action="{{ url_for('onboarding.save_paths') }}" method="post" id="pathsForm">
+        <div class="form-group">
+            <label for="media_path">Media Path</label>
+            <p class="help-text">The directory where your media files are stored.</p>
+            <div class="input-with-button">
+                <input type="text" id="media_path" name="media_path" value="{{ config.media_path }}" class="full-width">
+                <button type="button" class="browse-button" onclick="openFileBrowser('media_path')">Browse</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="transcode_path">Squished Output Path</label>
+            <p class="help-text">Directory where transcoded (squished) files will be stored.</p>
+            <div class="input-with-button">
+                <input type="text" id="transcode_path" name="transcode_path" value="{{ config.transcode_path }}" class="full-width">
+                <button type="button" class="browse-button" onclick="openFileBrowser('transcode_path')">Browse</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="ffmpeg_path">FFmpeg Path</label>
+            <p class="help-text">Path to the FFmpeg executable. This is required for transcoding.</p>
+            <div class="input-with-button">
+                <input type="text" id="ffmpeg_path" name="ffmpeg_path" value="{{ config.ffmpeg_path }}" class="full-width">
+                <button type="button" class="browse-button" onclick="openFileBrowser('ffmpeg_path')">Browse</button>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="ffprobe_path">FFprobe Path</label>
+            <p class="help-text">Path to the FFprobe executable. This is required for media analysis.</p>
+            <div class="input-with-button">
+                <input type="text" id="ffprobe_path" name="ffprobe_path" value="{{ config.ffprobe_path or '' }}" class="full-width">
+                <button type="button" class="browse-button" onclick="openFileBrowser('ffprobe_path')">Browse</button>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="max_concurrent_jobs">Max Concurrent Jobs</label>
+            <p class="help-text">Maximum number of transcoding jobs that can run simultaneously.</p>
+            <input type="number" id="max_concurrent_jobs" name="max_concurrent_jobs" value="{{ config.max_concurrent_jobs }}" min="1" max="10">
+        </div>
+
+        <hr>
+        <h3>Path Mappings</h3>
+        <p class="help-text">
+            Path mappings help resolve path differences between your media server and Squishy.
+            For example, if your media server reports paths as "/media/Movies" but Squishy accesses them at "/opt/Media/Movies", 
+            you would map "/media" to "/opt/Media".
+        </p>
+
+        <div id="pathMappings">
+            <!-- Display all existing mappings -->
+            {% set mapping_keys = config.path_mappings.keys()|list if config.path_mappings else [] %}
+            {% set mapping_values = config.path_mappings.values()|list if config.path_mappings else [] %}
+            
+            {% if mapping_keys|length > 0 %}
+                {% for i in range(0, mapping_keys|length) %}
+                <div class="path-mapping-row">
+                    <div class="mapping-fields">
+                        <div class="form-group">
+                            <label for="source_path_{{ i }}">Media Server Path {% if i > 0 %}{{ i + 1 }}{% endif %}</label>
+                            <input type="text" id="source_path_{{ i }}" name="source_path_{{ i }}" value="{{ mapping_keys[i] }}" placeholder="/media">
+                        </div>
+                        <div class="form-group">
+                            <label for="target_path_{{ i }}">Squishy Path {% if i > 0 %}{{ i + 1 }}{% endif %}</label>
+                            <input type="text" id="target_path_{{ i }}" name="target_path_{{ i }}" value="{{ mapping_values[i] }}" placeholder="/opt/media">
+                        </div>
+                    </div>
+                    <div class="mapping-actions">
+                        <button type="button" class="remove-mapping circle-button cancel-button" data-tooltip="Remove">
+                            <img src="/static/img/cancel.svg" alt="Remove" width="24" height="24">
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <!-- Show an empty state message if no mappings exist -->
+                <div class="path-mapping-empty">
+                    <p>No path mappings configured. Click "Add Mapping" below to create your first mapping.</p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="form-group">
+            <button type="button" id="addMapping" class="button secondary">Add Mapping</button>
+        </div>
+    </form>
+</div>
+
+<!-- File Browser Modal -->
+<div id="fileBrowserModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="fileBrowserTitle">Browse Directories</h2>
+            <span class="close" onclick="closeFileBrowser()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="current-path">
+                <span id="currentPath">/</span>
+            </div>
+            <div class="directory-list" id="directoryList">
+                <!-- Directory content will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" onclick="selectCurrentPath()">Select Current Path</button>
+            <button type="button" onclick="closeFileBrowser()">Cancel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block wizard_actions %}
+<button type="submit" form="pathsForm" class="button primary">Continue</button>
+{% endblock %}

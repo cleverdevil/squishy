@@ -6,7 +6,7 @@ import uuid
 import logging
 import threading
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import requests
 
@@ -827,3 +827,103 @@ def scan_plex_async(url: str, token: str):
     thread.daemon = True
     thread.start()
     return thread
+
+
+def get_jellyfin_libraries(url: str, api_key: str) -> List[Dict[str, Any]]:
+    """
+    Get list of libraries from Jellyfin.
+    
+    Args:
+        url: Jellyfin server URL
+        api_key: Jellyfin API key
+        
+    Returns:
+        List of library dictionaries with id, name, and enabled status
+    """
+    config = load_config()
+    headers = {
+        "X-MediaBrowser-Token": api_key,
+        "Content-Type": "application/json",
+    }
+    
+    libraries = []
+    
+    try:
+        response = requests.get(f"{url}/Library/VirtualFolders", headers=headers)
+        if response.status_code == 200:
+            libraries_data = response.json()
+            
+            for library in libraries_data:
+                library_id = library.get("ItemId")
+                library_name = library.get("Name", "Unknown")
+                library_type = library.get("CollectionType", "Unknown")
+                
+                if library_id:
+                    # Check if this library is enabled in our config
+                    enabled = True
+                    if library_id in config.enabled_libraries:
+                        enabled = config.enabled_libraries.get(library_id, True)
+                        
+                    libraries.append({
+                        "id": library_id,
+                        "name": library_name,
+                        "type": library_type,
+                        "enabled": enabled
+                    })
+        else:
+            logging.error(f"Failed to get Jellyfin libraries: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Error getting Jellyfin libraries: {str(e)}")
+    
+    return libraries
+
+
+def get_plex_libraries(url: str, token: str) -> List[Dict[str, Any]]:
+    """
+    Get list of libraries from Plex.
+    
+    Args:
+        url: Plex server URL
+        token: Plex authentication token
+        
+    Returns:
+        List of library dictionaries with id, name, and enabled status
+    """
+    config = load_config()
+    headers = {
+        "X-Plex-Token": token,
+        "Accept": "application/json"
+    }
+    
+    libraries = []
+    
+    try:
+        # Plex uses a different endpoint to list libraries
+        response = requests.get(f"{url}/library/sections", headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            sections = data.get("MediaContainer", {}).get("Directory", [])
+            
+            for section in sections:
+                section_id = section.get("key")
+                section_title = section.get("title", "Unknown")
+                section_type = section.get("type", "Unknown")
+                
+                if section_id:
+                    # Check if this library is enabled in our config
+                    enabled = True
+                    if section_id in config.enabled_libraries:
+                        enabled = config.enabled_libraries.get(section_id, True)
+                        
+                    libraries.append({
+                        "id": section_id,
+                        "name": section_title,
+                        "type": section_type,
+                        "enabled": enabled
+                    })
+        else:
+            logging.error(f"Failed to get Plex libraries: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Error getting Plex libraries: {str(e)}")
+    
+    return libraries

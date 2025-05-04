@@ -1,0 +1,86 @@
+{% extends 'onboarding/wizard_base.html' %}
+
+{% block title %}Squishy Setup - Media Source{% endblock %}
+
+{% block wizard_title %}Media Source Configuration{% endblock %}
+
+{% set current_step = 1 %}
+
+{% block wizard_content %}
+<div class="step-description">
+    <p>
+        Squishy needs to connect to a media server to find your movies and TV shows.
+        You can use either Jellyfin or Plex as your media source.
+    </p>
+</div>
+
+<div class="step-form">
+    <form action="{{ url_for('onboarding.save_media_source') }}" method="post" id="sourceForm">
+        <div class="form-group">
+            <label>Select Media Source:</label>
+            <div class="radio-group">
+                <label class="radio-card {% if not config.plex_url or config.jellyfin_url %}selected{% endif %}">
+                    <input type="radio" name="source" value="jellyfin" {% if not config.plex_url or config.jellyfin_url %}checked{% endif %} required onclick="toggleSourceFields()">
+                    <div class="radio-card-content">
+                        <div class="radio-card-icon">
+                            <img src="{{ url_for('static', filename='img/jellyfin.svg') }}" alt="Jellyfin" class="source-icon">
+                        </div>
+                        <div class="radio-card-label">
+                            <strong>Jellyfin</strong>
+                            <span>Open source media server</span>
+                        </div>
+                    </div>
+                </label>
+                
+                <label class="radio-card {% if config.plex_url %}selected{% endif %}">
+                    <input type="radio" name="source" value="plex" {% if config.plex_url %}checked{% endif %} onclick="toggleSourceFields()">
+                    <div class="radio-card-content">
+                        <div class="radio-card-icon">
+                            <img src="{{ url_for('static', filename='img/plex.svg') }}" alt="Plex" class="source-icon">
+                        </div>
+                        <div class="radio-card-label">
+                            <strong>Plex</strong>
+                            <span>Popular media server platform</span>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div id="jellyfinFields" class="source-fields" {% if config.plex_url and not config.jellyfin_url %}style="display:none"{% endif %}>
+            <div class="form-group">
+                <label for="jellyfin_url">Jellyfin URL</label>
+                <input type="text" id="jellyfin_url" name="jellyfin_url" value="{{ config.jellyfin_url or '' }}" placeholder="http://jellyfin:8096">
+                <p class="help-text">The full URL to your Jellyfin server, including the port number.</p>
+            </div>
+            <div class="form-group">
+                <label for="jellyfin_api_key">Jellyfin API Key</label>
+                <input type="text" id="jellyfin_api_key" name="jellyfin_api_key" value="{{ config.jellyfin_api_key or '' }}" placeholder="your_api_key">
+                <p class="help-text">
+                    You can generate an API key in Jellyfin under Dashboard > Advanced > API Keys.
+                </p>
+            </div>
+        </div>
+
+        <div id="plexFields" class="source-fields" {% if not config.plex_url %}style="display:none"{% endif %}>
+            <div class="form-group">
+                <label for="plex_url">Plex URL</label>
+                <input type="text" id="plex_url" name="plex_url" value="{{ config.plex_url or '' }}" placeholder="http://plex:32400">
+                <p class="help-text">The full URL to your Plex server, including the port number.</p>
+            </div>
+            <div class="form-group">
+                <label for="plex_token">Plex Token</label>
+                <input type="text" id="plex_token" name="plex_token" value="{{ config.plex_token or '' }}" placeholder="your_plex_token">
+                <p class="help-text">
+                    Your Plex authentication token. You can find instructions for obtaining your token 
+                    <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank">here</a>.
+                </p>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block wizard_actions %}
+<button type="submit" form="sourceForm" class="button primary">Continue</button>
+{% endblock %}
