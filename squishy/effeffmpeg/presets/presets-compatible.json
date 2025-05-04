@@ -1,0 +1,139 @@
+{
+  "presets": {
+    "360p-low": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "64k",
+      "bitrate": "500k",
+      "allow_fallback": true
+    },
+    "360p-medium": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "bitrate": "750k",
+      "allow_fallback": true
+    },
+    "360p-high": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "360p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "bitrate": "1M",
+      "allow_fallback": true
+    },
+    "480p-low": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "64k",
+      "bitrate": "800k",
+      "allow_fallback": true
+    },
+    "480p-medium": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "bitrate": "1.2M",
+      "allow_fallback": true
+    },
+    "480p-high": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "480p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "bitrate": "1.5M",
+      "allow_fallback": true
+    },
+    "720p-low": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "96k",
+      "bitrate": "1.5M",
+      "allow_fallback": true
+    },
+    "720p-medium": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "bitrate": "2.5M",
+      "allow_fallback": true
+    },
+    "720p-high": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "720p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "bitrate": "4M",
+      "allow_fallback": true
+    },
+    "1080p-low": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "128k",
+      "bitrate": "3M",
+      "allow_fallback": true
+    },
+    "1080p-medium": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "bitrate": "5M",
+      "allow_fallback": true
+    },
+    "1080p-high": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "1080p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "bitrate": "8M",
+      "allow_fallback": true
+    },
+    "2160p-low": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "bitrate": "10M",
+      "allow_fallback": true
+    },
+    "2160p-medium": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "192k",
+      "bitrate": "15M",
+      "allow_fallback": true
+    },
+    "2160p-high": {
+      "container": ".mp4",
+      "codec": "h264",
+      "scale": "2160p",
+      "audio_codec": "aac",
+      "audio_bitrate": "256k",
+      "bitrate": "20M",
+      "allow_fallback": true
+    }
+  }
+}
