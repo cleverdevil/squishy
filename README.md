@@ -1,3 +1,5 @@
+<center><img src="https://raw.githubusercontent.com/cleverdevil/squishy/main/squishy/static/img/splash.png"></center>
+
 # Squishy: Media Transcoding Made Simple
 
 Digital packrats often have media libraries that are filled with high resolution
