@@ -9,13 +9,6 @@ echo "============================================"
 mkdir -p /config /transcodes
 chown -R squishy:squishy /config /transcodes
 
-# Copy example config if needed
-if [ ! -f /config/config.json ]; then
-  echo "No config file found, creating one from example..."
-  cp /app/config.json.example /config/config.json
-  chown squishy:squishy /config/config.json
-fi
-
 echo "============================================"
 echo "Hardware Acceleration Setup"
 echo "============================================"
@@ -24,14 +17,14 @@ echo "============================================"
 if [ -d "/dev/dri" ]; then
   echo "DRI devices found:"
   ls -la /dev/dri
-  
+
   # Get the group ID of the renderD128 device
   if [ -e "/dev/dri/renderD128" ]; then
     GROUP_ID=$(stat -c "%g" /dev/dri/renderD128)
     GROUP_NAME=$(getent group $GROUP_ID | cut -d: -f1)
-    
+
     echo "RenderD128 device has GID: $GROUP_ID (group name: $GROUP_NAME)"
-    
+
     # Add squishy user to the correct group
     if [ ! -z "$GROUP_NAME" ]; then
       echo "Adding squishy user to $GROUP_NAME group"
@@ -41,7 +34,7 @@ if [ -d "/dev/dri" ]; then
       groupmod -g $GROUP_ID video
       usermod -a -G video squishy
     fi
-    
+
     # Fix permissions
     echo "Setting permissions on /dev/dri"
     chmod -R 755 /dev/dri

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   squishy:
     build:
@@ -10,21 +8,20 @@ services:
     ports:
       - "5101:5101"
     volumes:
-      - /path/to/config:/config
-      - /path/to/media:/media
-      - /path/to/transcodes:/transcodes
+      - /path/to/host/squishy/config:/config
+      - /path/to/host/media/root/dir:/media
+      - /path/to/host/squishy/transcode/output/dir:/transcodes
     environment:
-      - TZ=${TZ:-UTC}
+      - TZ=America/Los_Angeles
       - PUID=1000
       - PGID=1000
-    # Optional: Enable GPU passthrough
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu, compute, utility]
-    # Optional: Enable device passthrough for VA-API (uncomment if needed)
-    # devices:
-    #   - /dev/dri:/dev/dri
+      - LIBVA_DRIVER_NAME=iHD
+      - LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
+    # Map only the specific render device needed for hardware acceleration
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/card0:/dev/dri/card0
+    # Ensure we have access to the required groups
+    group_add:
+      - video
+      - "105"  # Render group GID

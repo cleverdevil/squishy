@@ -41,9 +41,6 @@ WORKDIR /app
 COPY . /app/
 RUN chown -R squishy:squishy /app
 
-# Copy example config
-RUN cp /app/config/config.example.json /app/config.json.example
-
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

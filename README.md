@@ -45,54 +45,27 @@ is to run Squishy as a Docker Container. The repository includes a
 git clone https://github.com/yourusername/squishy.git
 cd squishy
 ```
-
-2. Configure Squishy:
-   - Copy the example configuration:
-   ```bash
-   cp config/config.example.json config/config.json
-   ```
-   - Edit `config/config.json` to set up your media paths, Jellyfin or Plex server details, and path mappings.
-
-3. Modify docker-compose.yml:
+2. Modify docker-compose.yml:
    - Uncomment and edit the media path volume mounts in both Squishy and Jellyfin/Plex services
    - Uncomment the appropriate GPU/hardware acceleration settings if needed
    - Choose either Jellyfin or Plex (comment out the one you don't use)
 
-4. Start the containers:
+3. Start the containers:
 ```bash
-docker-compose up -d
+docker-compose up --build
 ```
 
-5. Access Squishy:
-   - Open your browser and navigate to `http://localhost:5101`
-   - If you included Jellyfin, it will be available at `http://localhost:8096`
-   - If you included Plex, it will be available at `http://localhost:32400/web`
+4. Access Squishy:
 
-### Environment Variables
-
-You can customize the Docker setup with the following environment variables:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TRANSCODES_PATH` | Path where transcoded files will be stored | `./transcodes` |
-| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
-| `DEBUG` | Enable Flask debug mode | `false` |
-| `SECRET_KEY` | Flask secret key | `default_development_key` |
-| `TZ` | Timezone | `UTC` |
-
-Example using environment variables:
-```bash
-TRANSCODES_PATH=/mnt/data/transcodes TZ=America/New_York docker-compose up -d
-```
+Open your browser and navigate to `http://your-host:5101`. Squishy will guide
+you through the rest of the setup process!
 
 ### Hardware Acceleration
 
-To enable hardware acceleration:
+Squishy currently supports VA-API for hardware accelerated transcoding. Support
+for other acceleration methods could be added if there is a strong demand from
+users.
 
-1. For NVIDIA GPUs:
-   - Uncomment the `deploy` section in docker-compose.yml
-   - Make sure you have the NVIDIA Container Toolkit installed on your host
-
-2. For Intel/AMD GPUs (VA-API):
-   - Uncomment the `devices` section to pass through `/dev/dri` 
-   - Set the appropriate `hw_accel` in your transcoding profiles
+Under the hood, Squishy uses an embedded project called `effeffmpeg`, which
+handles all of the transcoding and interfacing with ffmpeg. More detail is
+available in the [effeffmpeg README.md](https://github.com/cleverdevil/squishy/blob/main/squishy/effeffmpeg/README.md) in the source tree.
