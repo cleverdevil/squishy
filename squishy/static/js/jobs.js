@@ -202,8 +202,37 @@ function updateJobElement(job) {
         }
     }
 
-    // If this job has logs open, refresh them
-    if (openLogStates.has(job.id)) {
+    // If this job has logs open and we have ffmpeg_logs in the update, update the logs display
+    if (openLogStates.has(job.id) && job.ffmpeg_logs && job.ffmpeg_logs.length > 0) {
+        const logsContentEl = document.getElementById(`logs-content-${job.id}`);
+        if (logsContentEl) {
+            // Check if we should auto-scroll based on whether user is already at bottom
+            const wasAtBottom = isScrolledToBottom(logsContentEl);
+            
+            // Get current logs
+            let currentLogs = logsContentEl.textContent || '';
+            if (!currentLogs.includes(job.ffmpeg_logs[job.ffmpeg_logs.length - 1])) {
+                // Append new logs if they're not already there
+                job.ffmpeg_logs.forEach(logLine => {
+                    if (!currentLogs.includes(logLine)) {
+                        currentLogs += (currentLogs ? '\n' : '') + logLine;
+                    }
+                });
+                
+                // Update logs content
+                logsContentEl.textContent = currentLogs;
+                
+                // Auto-scroll if we were already at bottom
+                if (wasAtBottom) {
+                    setTimeout(() => scrollToBottom(logsContentEl), 10);
+                }
+            }
+        } else {
+            // If we can't find the logs content element but logs are open, do a full refresh
+            loadJobLogs(job.id);
+        }
+    } else if (openLogStates.has(job.id) && (!job.ffmpeg_logs || job.ffmpeg_logs.length === 0)) {
+        // If logs are open but we don't have logs in the update, do a full refresh
         loadJobLogs(job.id);
     }
 }

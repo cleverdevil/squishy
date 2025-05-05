@@ -352,24 +352,34 @@ def transcode(
             if progress_value is not None:
                 job.progress = progress_value
 
-            # Add to logs if it's not just a progress update
-            if not status_text.startswith("Time:"):
-                if len(job.ffmpeg_logs) >= 1000:
-                    job.ffmpeg_logs.pop(0)  # Remove oldest log if we have too many
-                job.ffmpeg_logs.append(status_text)
+            # Add to logs if it's not just a progress update or empty
+            if status_text and not status_text.startswith("Time:"):
+                with job._lock:
+                    # Always prepend the log type for better readability
+                    if not status_text.startswith("STDOUT:") and not status_text.startswith("STDERR:"):
+                        status_text = f"PROGRESS: {status_text}"
+                    
+                    # De-duplicate logs (avoid adding the same line multiple times)
+                    if not any(status_text in log for log in job.ffmpeg_logs[-20:]):
+                        if len(job.ffmpeg_logs) >= 1000:
+                            job.ffmpeg_logs.pop(0)  # Remove oldest log if we have too many
+                        job.ffmpeg_logs.append(status_text)
 
             # Emit socket update every 2 seconds
             if job.current_time and int(job.current_time) % 2 == 0:
                 try:
                     from squishy.socket_events import emit_job_update
-                    emit_job_update({
-                        "id": job.id,
-                        "media_id": job.media_id,
-                        "status": job.status,
-                        "progress": job.progress,
-                        "current_time": job.current_time,
-                        "duration": job.duration,
-                    })
+                    # Include ffmpeg_logs in the job update
+                    with job._lock:
+                        emit_job_update({
+                            "id": job.id,
+                            "media_id": job.media_id,
+                            "status": job.status,
+                            "progress": job.progress,
+                            "current_time": job.current_time,
+                            "duration": job.duration,
+                            "ffmpeg_logs": job.ffmpeg_logs[-30:] if job.ffmpeg_logs else [],  # Send last 30 log lines for efficiency
+                        })
                 except ImportError:
                     pass  # Ignore if socket_events can't be imported
 
@@ -393,12 +403,28 @@ def transcode(
                 overwrite=True,
                 presets_data={"preset": preset}  # Wrap the preset in a dict as expected by effeffmpeg
             )
+            
+            # Add the command to the logs right away
+            cmd_str = " ".join(command)
+            with job._lock:
+                job.ffmpeg_logs.append(f"COMMAND: {cmd_str}")
 
             # Store the command in the job
             cmd_str = " ".join(command)
             job.ffmpeg_command = cmd_str
             logger.debug(f"FFmpeg command: {cmd_str}")
 
+            # Create a wrapper for the progress callback to get process stdout/stderr too
+            def custom_progress_callback(status_text, progress_value):
+                # First, call the original callback
+                progress_callback(status_text, progress_value)
+                
+                # If this is a process object being returned from non-blocking transcode,
+                # store it for later access to stdout/stderr buffers
+                if isinstance(status_text, object) and hasattr(status_text, "stdout_buffer"):
+                    # Just a placeholder - we'll handle the process separately
+                    pass
+            
             # Now run the actual transcode non-blocking to use our progress callback
             process = effeff_transcode(
                 input_file=media_item.path,
@@ -407,7 +433,8 @@ def transcode(
                 non_blocking=True,
                 progress_callback=progress_callback,
                 preset_name="preset",  # Use the preset name
-                presets_data={"preset": preset}  # Pass the preset data directly
+                presets_data={"preset": preset},  # Pass the preset data directly
+                quiet=False  # Ensure we get verbose output for better logs
             )
 
             # Store the process ID for potential cancellation
@@ -432,13 +459,51 @@ def transcode(
                 if os.path.exists(output_path):
                     output_size = os.path.getsize(output_path)
                     job.update_output_size(format_file_size(output_size))
-
+                
+                # Read stdout and stderr buffers from the process and add to logs
+                if process.stdout_buffer or process.stderr_buffer:
+                    new_logs = []
+                    
+                    # Get stdout lines first (usually less important)
+                    for line in process.stdout_buffer:
+                        if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                            new_logs.append(f"STDOUT: {line}")
+                    
+                    # Get stderr lines (usually more important for ffmpeg)
+                    for line in process.stderr_buffer:
+                        if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                            new_logs.append(f"STDERR: {line}")
+                    
+                    # Add new logs to job logs
+                    if new_logs:
+                        with job._lock:
+                            # Keep the size manageable
+                            if len(job.ffmpeg_logs) + len(new_logs) > 1000:
+                                # Remove oldest logs to make room
+                                job.ffmpeg_logs = job.ffmpeg_logs[-(1000-len(new_logs)):]
+                            job.ffmpeg_logs.extend(new_logs)
+                
                 # Use process.poll() instead of wait with timeout to check if it's still running
                 # This avoids the TimeoutExpired exception when using eventlet's patched subprocess
                 if process.process.poll() is not None:
                     # Process completed
                     process.finished = True
                     process.returncode = process.process.returncode
+                    
+                    # Collect any final output
+                    stderr = process.get_stderr()
+                    stdout = process.get_stdout()
+                    
+                    # Add any remaining stderr output to logs
+                    if stderr:
+                        new_logs = []
+                        for line in stderr.splitlines():
+                            if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                                new_logs.append(f"STDERR: {line}")
+                        if new_logs:
+                            with job._lock:
+                                job.ffmpeg_logs.extend(new_logs)
+                    
                     break
 
                 # Sleep for a short time
