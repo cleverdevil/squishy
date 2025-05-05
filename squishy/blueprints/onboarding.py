@@ -111,6 +111,10 @@ def get_libraries():
     config = load_config()
     libraries = []
     
+    # Ensure enabled_libraries is initialized
+    if not config.enabled_libraries:
+        config.enabled_libraries = {}
+    
     if config.jellyfin_url and config.jellyfin_api_key:
         try:
             libraries = get_jellyfin_libraries(config.jellyfin_url, config.jellyfin_api_key)
@@ -125,6 +129,9 @@ def get_libraries():
             current_app.logger.error(f"Error getting Plex libraries: {e}")
             return jsonify({"success": False, "message": str(e), "libraries": []})
     
+    # Debug log
+    current_app.logger.debug(f"Found {len(libraries)} libraries, enabled_libraries config: {config.enabled_libraries}")
+    
     return jsonify({
         "success": True,
         "libraries": libraries,
@@ -137,13 +144,34 @@ def save_libraries():
     """Save enabled libraries configuration."""
     config = load_config()
     
-    # Get all enabled libraries from form
+    # Fetch all libraries to get the complete list
+    libraries = []
+    if config.jellyfin_url and config.jellyfin_api_key:
+        try:
+            libraries = get_jellyfin_libraries(config.jellyfin_url, config.jellyfin_api_key)
+        except Exception as e:
+            current_app.logger.error(f"Error getting Jellyfin libraries: {e}")
+    elif config.plex_url and config.plex_token:
+        try:
+            libraries = get_plex_libraries(config.plex_url, config.plex_token)
+        except Exception as e:
+            current_app.logger.error(f"Error getting Plex libraries: {e}")
+    
+    # Initialize all libraries as disabled by default
     enabled_libraries = {}
+    for library in libraries:
+        library_id = library.get('id')
+        if library_id:
+            # Mark all libraries as disabled by default
+            enabled_libraries[library_id] = False
+    
+    # Then update with the enabled libraries from the form
     for key, value in request.form.items():
         if key.startswith("library_"):
             library_id = key.replace("library_", "")
             enabled_libraries[library_id] = value == "on"
     
+    current_app.logger.debug(f"Saving enabled libraries: {enabled_libraries}")
     config.enabled_libraries = enabled_libraries
     save_config(config)
     

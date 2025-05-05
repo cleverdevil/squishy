@@ -100,7 +100,13 @@ function initMediaLibrariesStep() {
                     const enabledLibraries = data.enabled_libraries || {};
                     
                     data.libraries.forEach(library => {
-                        const isEnabled = enabledLibraries[library.id] !== false; // Default to enabled
+                        // Explicitly check if the library is enabled in the config
+                        // Default to enabled only if it's a new library not in the config
+                        const isEnabled = library.id in enabledLibraries 
+                            ? enabledLibraries[library.id] === true 
+                            : true;  // Default new libraries to enabled
+                        
+                        console.log(`Library: ${library.name}, ID: ${library.id}, Enabled: ${isEnabled}`);
                         
                         const libraryRow = document.createElement('div');
                         libraryRow.className = 'library-item';

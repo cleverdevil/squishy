@@ -108,9 +108,10 @@ def scan_jellyfin(url: str, api_key: str) -> List[MediaItem]:
         for library in libraries:
             library_id = library.get("ItemId")
             if library_id:
-                # Check if this library is enabled (default to True if not specified)
-                if library_id not in config.enabled_libraries or config.enabled_libraries.get(library_id, True):
+                # Check if this library is enabled (only if explicitly True)
+                if library_id in config.enabled_libraries and config.enabled_libraries.get(library_id) is True:
                     enabled_library_ids.append(library_id)
+                    logging.debug(f"Including enabled Jellyfin library: {library.get('Name', 'Unknown')} (id: {library_id})")
                 else:
                     logging.debug(f"Skipping disabled Jellyfin library: {library.get('Name', 'Unknown')} (id: {library_id})")
                     stats["skipped_libraries"] += 1
@@ -410,9 +411,16 @@ def scan_plex(url: str, token: str) -> List[MediaItem]:
                             logging.warning(f"Missing section key in section: {section_title}")
                             continue
 
-                        # Check if this library is enabled (default to True if not specified)
-                        if section_id in config.enabled_libraries and not config.enabled_libraries.get(section_id, True):
-                            logging.debug(f"Skipping disabled Plex library: {section_title} (id: {section_id})")
+                        # Check if this library is enabled (only if explicitly True)
+                        if section_id in config.enabled_libraries:
+                            # Only include if explicitly True
+                            if config.enabled_libraries.get(section_id) is not True:
+                                logging.debug(f"Skipping disabled Plex library: {section_title} (id: {section_id})")
+                                stats["skipped_libraries"] += 1
+                                continue
+                        # For libraries not in config, skip them (default to disabled)
+                        else:
+                            logging.debug(f"Skipping unconfigured Plex library: {section_title} (id: {section_id})")
                             stats["skipped_libraries"] += 1
                             continue
 
@@ -860,9 +868,8 @@ def get_jellyfin_libraries(url: str, api_key: str) -> List[Dict[str, Any]]:
                 
                 if library_id:
                     # Check if this library is enabled in our config
-                    enabled = True
-                    if library_id in config.enabled_libraries:
-                        enabled = config.enabled_libraries.get(library_id, True)
+                    # Only True if explicitly set to True in config
+                    enabled = config.enabled_libraries.get(library_id, True) is True
                         
                     libraries.append({
                         "id": library_id,
@@ -911,9 +918,8 @@ def get_plex_libraries(url: str, token: str) -> List[Dict[str, Any]]:
                 
                 if section_id:
                     # Check if this library is enabled in our config
-                    enabled = True
-                    if section_id in config.enabled_libraries:
-                        enabled = config.enabled_libraries.get(section_id, True)
+                    # Only True if explicitly set to True in config
+                    enabled = config.enabled_libraries.get(section_id, True) is True
                         
                     libraries.append({
                         "id": section_id,
