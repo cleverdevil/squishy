@@ -370,3 +370,15 @@ def delete_completed_transcode(filename):
         flash(f"Error deleting transcode: {message}", "error")
 
     return redirect(url_for("ui.completed"))
+
+
+@ui_bp.route("/test-responsive")
+def test_responsive():
+    """Test page for responsive design."""
+    return render_template("test_responsive.html")
+
+
+@ui_bp.route("/test-tables")
+def test_tables():
+    """Test page for responsive tables."""
+    return render_template("test_tables.html")

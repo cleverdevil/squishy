@@ -123,7 +123,7 @@ h2 {
 
 .container {
   max-width: 1200px;
-  margin: 8rem auto;
+  margin: 10rem auto; /* Increased from 8rem to 10rem for more space */
   padding: 0 2rem;
 }
 
@@ -149,7 +149,7 @@ nav {
   align-items: center;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0rem 2rem; /* Added vertical padding for more space */
 }
 
 .logo a {
@@ -570,6 +570,21 @@ table {
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   margin-bottom: 2rem;
+}
+
+/* Responsive table wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.table-responsive table {
+  margin-bottom: 0;
+  box-shadow: none;
 }
 
 thead {
@@ -2169,25 +2184,160 @@ progress {
 /* 18. Responsive Styles
 /* ========================================================================== */
 
+/* Mobile menu toggle */
+.mobile-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  z-index: 1000;
+  width: 40px;
+  height: 40px;
+  position: relative;
+  margin-right: 0.25rem;
+}
+
+.mobile-menu-toggle:focus {
+  outline: 2px solid rgba(144, 79, 168, 0.5);
+  border-radius: 4px;
+}
+
+.menu-bar {
+  display: block;
+  width: 25px;
+  height: 3px;
+  margin: 5px 0;
+  background-color: var(--accent-color);
+  border-radius: 3px;
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
 @media (max-width: 768px) {
   /* Layout adjustments */
   .container {
     padding: 0 1rem;
+    margin-top: 6.5rem; /* Increased to accommodate larger logo */
+    margin-bottom: 2rem; /* Added for better spacing at the bottom */
+  }
+
+  /* Tables responsive styles */
+  th, td {
+    padding: 0.5rem;
+    min-width: 100px; /* Ensure columns have minimum width on mobile */
+  }
+
+  /* Column widths for jobs table */
+  .col-media { min-width: 180px; }
+  .col-size { min-width: 100px; }
+  .col-preset { min-width: 110px; }
+  .col-status { min-width: 100px; }
+  .col-progress { min-width: 120px; }
+  .col-actions { min-width: 100px; }
+
+  /* Optimize progress bar display */
+  .progress-container {
+    max-width: 120px;
+  }
+
+  .progress-bar-row {
+    flex-wrap: nowrap;
+  }
+
+  progress {
+    height: 6px; /* Smaller height on mobile */
+  }
+
+  .progress-text {
+    font-size: 0.55rem; /* Smaller font on mobile */
+    min-width: 2.5em; /* Smaller width on mobile */
+  }
+
+  .progress-time {
+    font-size: 0.55rem; /* Smaller font on mobile */
+  }
+
+  .action-buttons-container {
+    gap: 0.25rem; /* Smaller gap on mobile */
+  }
+
+  .circle-button {
+    width: 2rem; /* Smaller button on mobile */
+    height: 2rem; /* Smaller button on mobile */
+  }
+
+  .circle-button img {
+    width: 16px; /* Smaller icon on mobile */
+    height: 16px; /* Smaller icon on mobile */
+  }
+
+  /* Responsive cell content */
+  .responsive-ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
   }
 
   /* Navigation */
-  nav {
-    flex-direction: column;
-    padding: 1rem;
+  header {
+    height: 55px; /* Set specific height for mobile header */
+    padding: 0;
   }
 
-  nav ul {
-    margin-top: 1rem;
+  nav {
+    padding: 0;
+    position: relative;
+    height: 55px; /* Match header height */
+    justify-content: center; /* Center nav items */
+  }
+
+  .logo {
+    z-index: 1001;
+  }
+
+  .logo img {
+    position: absolute;
+    height: 80px; /* Increased from 40px to match desktop style */
+    top: 0;
+    left: 20px;
+    z-index: 1002;
+  }
+
+  .mobile-menu-toggle {
+    display: block;
+    position: absolute;
+    right: 15px;
+    top: 6px; /* Adjusted from 12px to move it up */
+  }
+
+  .nav-menu {
+    position: absolute;
+    top: 55px; /* Align with bottom of the header */
+    left: 0;
+    width: 100%;
+    flex-direction: column;
+    background-color: var(--primary-color);
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+    z-index: 1000;
+    border-bottom: 0.5rem solid var(--accent-color);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0);
+    transition: max-height 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .nav-menu.open {
+    max-height: 300px; /* Enough height for all menu items */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
   }
 
   nav ul li {
-    margin-left: 1rem;
-    margin-right: 1rem;
+    margin: 0;
+    width: 100%;
+    text-align: center;
+    padding: 1rem 0;
   }
 
   /* Media headers */
@@ -2505,14 +2655,14 @@ progress {
 }
 
 @keyframes tiltAndZoom {
-  0%, 100% { 
-    transform: rotate(0deg) scale(1); 
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
   }
-  25% { 
-    transform: rotate(-5deg) scale(1.03); 
+  25% {
+    transform: rotate(-5deg) scale(1.03);
   }
-  75% { 
-    transform: rotate(5deg) scale(1.03); 
+  75% {
+    transform: rotate(5deg) scale(1.03);
   }
 }
 

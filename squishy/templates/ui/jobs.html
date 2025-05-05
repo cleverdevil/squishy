@@ -14,7 +14,7 @@
     {# Macro for job row to avoid code duplication #}
     {% macro render_job_row(item, queue_index=0) %}
     <tr data-job-id="{{ item.job.id }}">
-        <td>{{ item.media_title }}</td>
+        <td><span class="responsive-ellipsis">{{ item.media_title }}</span></td>
         <td>{{ item.file_size }}</td>
         <td>{{ item.job.preset_name }}</td>
         <td class="status-{{ item.job.status }} status" data-job-id="{{ item.job.id }}">
@@ -118,23 +118,25 @@
     {# Active Jobs Section #}
     <h2>Active Jobs</h2>
     {% if active_jobs %}
-    <table>
-        <thead>
-            <tr>
-                <th>Media</th>
-                <th>Size</th>
-                <th>Preset</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in active_jobs %}
-                {{ render_job_row(item, loop.index0) }}
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-media">Media</th>
+                    <th class="col-size">Size</th>
+                    <th class="col-preset">Preset</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-progress">Progress</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in active_jobs %}
+                    {{ render_job_row(item, loop.index0) }}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% else %}
     <div class="empty-state">
         <div class="empty-state-mascot">
@@ -149,23 +151,25 @@
     {# Completed Jobs Section #}
     <h2>Completed Jobs</h2>
     {% if completed_jobs %}
-    <table>
-        <thead>
-            <tr>
-                <th>Media</th>
-                <th>Size</th>
-                <th>Preset</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in completed_jobs %}
-                {{ render_job_row(item) }}
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-media">Media</th>
+                    <th class="col-size">Size</th>
+                    <th class="col-preset">Preset</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-progress">Progress</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in completed_jobs %}
+                    {{ render_job_row(item) }}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% else %}
     <div class="empty-state">
         <div class="empty-state-mascot">
@@ -190,23 +194,25 @@
         </div>
     </div>
     {% elif failed_jobs %}
-    <table>
-        <thead>
-            <tr>
-                <th>Media</th>
-                <th>Size</th>
-                <th>Preset</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in failed_jobs %}
-                {{ render_job_row(item) }}
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-media">Media</th>
+                    <th class="col-size">Size</th>
+                    <th class="col-preset">Preset</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-progress">Progress</th>
+                    <th class="col-actions">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in failed_jobs %}
+                    {{ render_job_row(item) }}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% else %}
     <div class="empty-state">
         <div class="empty-state-mascot">

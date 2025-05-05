@@ -34,7 +34,15 @@
             <div class="logo">
                 <a href="{{ url_for('ui.index') }}"><img src="/static/img/logo.png" alt="Squishy!"></a>
             </div>
-            <ul>
+            
+            <!-- Mobile menu toggle button -->
+            <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                <span class="menu-bar"></span>
+                <span class="menu-bar"></span>
+                <span class="menu-bar"></span>
+            </button>
+            
+            <ul class="nav-menu">
                 <li{% if request.endpoint == 'ui.index' %} class="active"{% endif %}><a href="{{ url_for('ui.index') }}">Home</a></li>
                 <li{% if request.endpoint == 'ui.jobs' %} class="active"{% endif %}><a href="{{ url_for('ui.jobs') }}">Jobs</a></li>
                 <li{% if request.endpoint == 'ui.completed' %} class="active"{% endif %}><a href="{{ url_for('ui.completed') }}">Completed</a></li>
@@ -88,6 +96,7 @@
     <script src="{{ url_for('static', filename='js/splash.js') }}"></script>
     <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
     <script src="{{ url_for('static', filename='js/tooltips.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile-nav.js') }}"></script>
 
     <!-- Page-specific scripts -->
     {% block scripts %}{% endblock %}
