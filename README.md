@@ -22,15 +22,14 @@ transcoding, and downloading your media as frictionless as possible:
   poster art.
 * Integration with Jellyfin and Plex media servers to quickly add your media
   library to Squishy.
-* Flexible transcoding profiles, giving you the ability to optimize for your use
-  case. Profiles define a target resolution, codec, and quality. Squishy comes
-  with default profiles: high, medium, low, and potato, which target H.264 videos in
-  either MKV or MP4 with 4K, 1080p, 720p, and 480p respectively.
-* Customize and create profiles to let you dial-in your personal preferences by
-  selecting custom resolutions, bitrates, and codecs such as HEVC and AV1.
+* Flexible transcoding presets, giving you the ability to optimize for your use
+  case. Presets define a target resolution, codec, and quality. Squishy comes
+  with default presets, along with additional preset libraries for different
+  tradeoffs.
+* Customize and create your own presets to let you dial-in your personal preferences by
+  selecting custom resolutions, bitrates, and codecs.
 * Hardware acceleration support with automatic failover to software encoding when
-  hardware acceleration fails. Configurable per transcoding profile to either allow
-  or prevent failover based on your requirements.
+  hardware acceleration fails.
 * Direct download links for your transcoded media that work with any browser or
   media player app.
 
@@ -44,7 +43,7 @@ is to run Squishy as a Docker Container. The repository includes a
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/squishy.git
+git clone https://github.com/cleverdevil/squishy.git
 cd squishy
 ```
 2. Modify docker-compose.yml:
@@ -54,7 +53,7 @@ cd squishy
 
 3. Start the containers:
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 4. Access Squishy:
