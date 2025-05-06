@@ -1,62 +1,56 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.0.1-base-ubuntu22.04
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1 \
-    CONFIG_PATH=/config/config.json
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
-# Create app user
-RUN groupadd -r squishy && \
-    useradd -r -g squishy -d /app -s /bin/bash squishy
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies including ffmpeg and CUDA development libraries
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
     ffmpeg \
-    libva-dev \
-    va-driver-all \
-    mesa-va-drivers \
-    intel-media-va-driver \
-    i965-va-driver \
-    libva-drm2 \
-    libva-x11-2 \
-    libdrm2 \
-    libdrm-intel1 \
-    libvdpau1 \
-    ocl-icd-opencl-dev \
-    vainfo \
-    && apt-get clean \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    nvidia-cuda-toolkit \
+    nvidia-cuda-dev \
+    libavfilter-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create necessary directories
-RUN mkdir -p /app && \
-    chown -R squishy:squishy /app
-
-# Set working directory
+# Create app directory
 WORKDIR /app
 
-# Copy project files
-COPY . /app/
-RUN chown -R squishy:squishy /app
+# Copy requirements and install
+COPY pyproject.toml /app/
+RUN pip3 install --no-cache-dir -e .
 
-# Copy entrypoint script
+# Copy application code
+COPY . /app/
+
+# Create directories if they don't exist
+RUN mkdir -p /media /transcode
+
+# Entry point
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Switch to app user for pip install
-USER squishy
+# Set default environment variables
+ENV MEDIA_PATH=/media
+ENV TRANSCODE_PATH=/transcode
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install -e .
+# Default ports
+EXPOSE 5000
 
-# Switch back to root for entrypoint
-USER root
+# Runtime label for using NVIDIA container
+LABEL com.nvidia.volumes.needed="nvidia_driver"
 
-# Expose port
-EXPOSE 5101
+# NVIDIA container required environment variables
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=video,compute,utility
 
-# Command to run
+# Default command
 ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "run.py"]

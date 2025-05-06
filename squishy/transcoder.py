@@ -800,8 +800,37 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
 
     # Add detected devices
     device = capabilities.get("device")
-    if device and hwaccel == "vaapi":
-        result["devices"]["vaapi"].append({"path": device})
+    if device:
+        if hwaccel == "vaapi":
+            result["devices"]["vaapi"].append({"path": device})
+        elif hwaccel == "cuda":
+            # For CUDA, device is usually a GPU number (0, 1, etc.)
+            # We'll try to get more details about the GPU if possible
+            try:
+                # Try to get NVIDIA GPU information using nvidia-smi
+                gpu_info_cmd = "nvidia-smi --query-gpu=name,memory.total --format=csv,noheader"
+                process = subprocess.Popen(gpu_info_cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, _ = process.communicate()
+                
+                if process.returncode == 0 and stdout:
+                    # Parse the GPU information
+                    gpu_infos = stdout.decode('utf-8').strip().split('\n')
+                    for i, info in enumerate(gpu_infos):
+                        parts = info.split(',')
+                        if len(parts) >= 2:
+                            gpu_name = parts[0].strip()
+                            gpu_memory = parts[1].strip()
+                            result["devices"]["cuda"].append({
+                                "index": str(i),
+                                "name": gpu_name,
+                                "memory": gpu_memory
+                            })
+                else:
+                    # Fall back to just using the device index
+                    result["devices"]["cuda"].append({"index": device})
+            except (subprocess.SubprocessError, FileNotFoundError):
+                # Fall back if nvidia-smi isn't available
+                result["devices"]["cuda"].append({"index": device})
 
     # Set recommended method and device
     if hwaccel:
