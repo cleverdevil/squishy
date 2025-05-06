@@ -332,7 +332,7 @@ def detect_capabilities(ffmpeg_path: str = "ffmpeg", quiet: bool = False) -> Dic
     """
     Detect hardware acceleration capabilities on the system.
 
-    Tests for VAAPI hardware encoders by running small FFmpeg test commands.
+    Tests for VAAPI and NVIDIA/CUDA hardware encoders by running small FFmpeg test commands.
 
     Args:
         ffmpeg_path: Path to the ffmpeg executable
@@ -349,7 +349,7 @@ def detect_capabilities(ffmpeg_path: str = "ffmpeg", quiet: bool = False) -> Dic
     """
     capabilities = {
         "hwaccel": None,
-        "device": "/dev/dri/renderD128",
+        "device": "/dev/dri/renderD128",  # Default VAAPI device
         "encoders": {},
         "fallback_encoders": {
             "h264": "libx264",
@@ -359,38 +359,85 @@ def detect_capabilities(ffmpeg_path: str = "ffmpeg", quiet: bool = False) -> Dic
         }
     }
 
+    # Check for VAAPI capabilities
     device = capabilities["device"]
+    has_vaapi = os.path.exists(device)
 
-    if not os.path.exists(device):
+    # Check for CUDA capabilities
+    has_cuda = False
+    success, output = run_command(f"{ffmpeg_path} -hide_banner -hwaccels")
+    if success and "cuda" in output.lower():
+        has_cuda = True
         if not quiet:
-            print(f"[✗] VAAPI device {device} does not exist.")
+            print("[✓] CUDA hardware acceleration is available")
+
+    # If no hardware acceleration is available, return early
+    if not has_vaapi and not has_cuda:
+        if not quiet:
+            print("[✗] No hardware acceleration capabilities detected")
         return capabilities
 
-    # Use the provided ffmpeg path
-    tests = {
-        "h264_vaapi": (
-            f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
-            f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
-            f"-c:v h264_vaapi -t 1 -f null -"
-        ),
-        "hevc_vaapi": (
-            f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
-            f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
-            f"-c:v hevc_vaapi -t 1 -f null -"
-        )
-    }
+    # VAAPI tests
+    if has_vaapi:
+        vaapi_tests = {
+            "h264_vaapi": (
+                f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
+                f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
+                f"-c:v h264_vaapi -t 1 -f null -"
+            ),
+            "hevc_vaapi": (
+                f"{ffmpeg_path} -hide_banner -init_hw_device vaapi=va:{device} -filter_hw_device va "
+                f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 -vf 'format=nv12,hwupload' "
+                f"-c:v hevc_vaapi -t 1 -f null -"
+            )
+        }
 
-    for encoder, cmd in tests.items():
-        if not quiet:
-            print(f"Testing {encoder}...")
-        success, output = run_command(cmd)
-        if success:
+        for encoder, cmd in vaapi_tests.items():
             if not quiet:
-                print(f"[✓] {encoder} supported")
-            capabilities["hwaccel"] = "vaapi"
-            capabilities["encoders"][encoder.replace("_vaapi", "")] = encoder
-        elif not quiet:
-            print(f"[✗] {encoder} not supported:\n{output.strip()}\n")
+                print(f"Testing {encoder}...")
+            success, output = run_command(cmd)
+            if success:
+                if not quiet:
+                    print(f"[✓] {encoder} supported")
+                capabilities["hwaccel"] = "vaapi"
+                capabilities["encoders"][encoder.replace("_vaapi", "")] = encoder
+            elif not quiet:
+                print(f"[✗] {encoder} not supported:\n{output.strip()}\n")
+
+    # CUDA/NVENC tests
+    if has_cuda:
+        cuda_tests = {
+            "h264_nvenc": (
+                f"{ffmpeg_path} -hide_banner "
+                f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 "
+                f"-c:v h264_nvenc -t 1 -f null -"
+            ),
+            "hevc_nvenc": (
+                f"{ffmpeg_path} -hide_banner "
+                f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 "
+                f"-c:v hevc_nvenc -t 1 -f null -"
+            ),
+            "av1_nvenc": (
+                f"{ffmpeg_path} -hide_banner "
+                f"-f lavfi -i testsrc=duration=1:size=1280x720:rate=30 "
+                f"-c:v av1_nvenc -t 1 -f null -"
+            )
+        }
+
+        for encoder, cmd in cuda_tests.items():
+            if not quiet:
+                print(f"Testing {encoder}...")
+            success, output = run_command(cmd)
+            if success:
+                if not quiet:
+                    print(f"[✓] {encoder} supported")
+                # Only override hwaccel if VAAPI isn't already detected
+                if capabilities["hwaccel"] is None:
+                    capabilities["hwaccel"] = "cuda"
+                    capabilities["device"] = "0"  # Default CUDA device
+                capabilities["encoders"][encoder.replace("_nvenc", "")] = encoder
+            elif not quiet:
+                print(f"[✗] {encoder} not supported:\n{output.strip()}\n")
 
     return capabilities
 
@@ -790,6 +837,7 @@ def generate_ffmpeg_command(
 
     This function creates an FFmpeg command that optimally utilizes available hardware
     acceleration on the system when possible, falling back to software encoding when needed.
+    Supports VAAPI and CUDA/NVENC acceleration methods.
 
     Args:
         input_file: Path to the input video file
@@ -806,6 +854,7 @@ def generate_ffmpeg_command(
         flac_compression: FLAC compression level (0-8)
         overwrite: Add -y flag to force overwriting output file
         quiet: Suppress informational output
+        progress: Output machine-readable progress information
 
     Returns:
         A list of strings forming the FFmpeg command
@@ -858,8 +907,11 @@ def generate_ffmpeg_command(
             print(f"[✗] {error_msg}")
         raise ValueError(error_msg)
 
-    # Using hardware is a runtime decision that affects how CRF is handled
-    using_hardware = encoder and hwaccel == "vaapi"
+    # Determine which hardware acceleration method is in use
+    using_vaapi = encoder and hwaccel == "vaapi"
+    using_cuda = encoder and hwaccel == "cuda"
+    using_hardware = using_vaapi or using_cuda
+    
     if using_hardware and crf is not None and not quiet:
         print("[!] CRF is only allowed with software encoding. CRF will be ignored when hardware encoding is used.")
 
@@ -870,9 +922,9 @@ def generate_ffmpeg_command(
     if overwrite:
         command.append("-y")
 
-    if using_hardware:
+    if using_vaapi:
         if not quiet:
-            print(f"[✓] Using hardware acceleration with encoder '{encoder}'")
+            print(f"[✓] Using VAAPI hardware acceleration with encoder '{encoder}'")
         command += [
             "-hwaccel", "vaapi",
             "-hwaccel_device", device,
@@ -888,7 +940,45 @@ def generate_ffmpeg_command(
         command += ["-vf", ",".join(filters), "-c:v", encoder]
         if bitrate:
             command += ["-b:v", bitrate]
+            
+    elif using_cuda:
+        if not quiet:
+            print(f"[✓] Using CUDA/NVENC hardware acceleration with encoder '{encoder}'")
+        
+        # For CUDA, we use the hwaccel for decoding and the nvenc encoder for encoding
+        command += [
+            "-hwaccel", "cuda",
+            "-hwaccel_device", device,  # CUDA device number (usually 0)
+            "-i", str(input_file)
+        ]
+        
+        if scale:
+            width, height = parse_resolution(scale)
+            filters.append(f"scale_cuda={width}:{height}")
+            command += ["-vf", ",".join(filters)]
+        
+        command += ["-c:v", encoder]
+        
+        # NVENC supports various encoding parameters
+        if bitrate:
+            command += ["-b:v", bitrate]
+            
+        # Add specific NVENC parameters for quality tuning
+        # These parameters help optimize the quality vs. performance tradeoff
+        command += [
+            "-rc:v", "vbr",  # Variable bitrate mode
+            "-qmin:v", "0",
+            "-qmax:v", "51",
+            "-spatial_aq:v", "1",  # Enable spatial adaptive quantization
+            "-temporal_aq:v", "1"  # Enable temporal adaptive quantization
+        ]
+        
+        # GPU selection for NVENC (in case of multi-GPU systems)
+        if device:
+            command += ["-gpu", device]
+            
     else:
+        # Software encoding path
         command += ["-i", str(input_file)]
         if scale:
             width, height = parse_resolution(scale)
@@ -902,6 +992,7 @@ def generate_ffmpeg_command(
         else:
             command += ["-crf", "28"]
 
+    # Audio handling (same for all encoder types)
     if audio_codec == "copy":
         command += ["-c:a", "copy"]
     else:
