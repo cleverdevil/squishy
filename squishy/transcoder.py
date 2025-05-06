@@ -13,9 +13,12 @@ import time
 from typing import Dict, Optional, List, Callable, Any
 
 from squishy.config import load_config
-from squishy.models import TranscodeJob, MediaItem, Movie, Episode
+from squishy.models import TranscodeJob, MediaItem, Episode
 from squishy.scanner import get_media
-from squishy.effeffmpeg.effeffmpeg import transcode as effeff_transcode, detect_capabilities, TranscodeProcess
+from squishy.effeffmpeg.effeffmpeg import (
+    transcode as effeff_transcode,
+    detect_capabilities,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -119,9 +122,7 @@ def process_job_queue():
             if job and job.status == "pending":
                 # Start the job
                 _start_transcode_job(job, media_item, preset_name, output_dir)
-                logger.debug(
-                    f"Started queued job {job_id}, jobs remaining in queue"
-                )
+                logger.debug(f"Started queued job {job_id}, jobs remaining in queue")
                 available_slots -= 1
             else:
                 logger.warning(
@@ -294,17 +295,13 @@ def transcode(
         # Update status with thread safety
         job.update_status("processing")
         logger.debug(f"Job {job.id} status changed to processing")
-        
-        # Apply path mappings to the output directory
-        # This ensures we use the correct path for transcodes, especially in Docker
-        original_output_dir = output_dir
-        output_dir = apply_output_path_mapping(output_dir)
-        
-        if original_output_dir != output_dir:
-            logger.info(f"Output directory mapped from {original_output_dir} to {output_dir}")
+
+        # Always use the configured transcode_path from config
+        config = load_config()
+        output_dir = config.transcode_path
+        logger.info(f"Using configured transcode_path: {output_dir}")
 
         # Get the preset from config
-        config = load_config()
         if preset_name not in config.presets:
             raise ValueError(f"Preset '{preset_name}' not found in configuration")
 
@@ -356,36 +353,44 @@ def transcode(
             if status_text and not status_text.startswith("Time:"):
                 with job._lock:
                     # Always prepend the log type for better readability
-                    if not status_text.startswith("STDOUT:") and not status_text.startswith("STDERR:"):
+                    if not status_text.startswith(
+                        "STDOUT:"
+                    ) and not status_text.startswith("STDERR:"):
                         status_text = f"PROGRESS: {status_text}"
-                    
+
                     # De-duplicate logs (avoid adding the same line multiple times)
                     if not any(status_text in log for log in job.ffmpeg_logs[-20:]):
                         if len(job.ffmpeg_logs) >= 1000:
-                            job.ffmpeg_logs.pop(0)  # Remove oldest log if we have too many
+                            job.ffmpeg_logs.pop(
+                                0
+                            )  # Remove oldest log if we have too many
                         job.ffmpeg_logs.append(status_text)
 
             # Emit socket update every 2 seconds
             if job.current_time and int(job.current_time) % 2 == 0:
                 try:
                     from squishy.socket_events import emit_job_update
+
                     # Include ffmpeg_logs in the job update
                     with job._lock:
-                        emit_job_update({
-                            "id": job.id,
-                            "media_id": job.media_id,
-                            "status": job.status,
-                            "progress": job.progress,
-                            "current_time": job.current_time,
-                            "duration": job.duration,
-                            "ffmpeg_logs": job.ffmpeg_logs[-30:] if job.ffmpeg_logs else [],  # Send last 30 log lines for efficiency
-                        })
+                        emit_job_update(
+                            {
+                                "id": job.id,
+                                "media_id": job.media_id,
+                                "status": job.status,
+                                "progress": job.progress,
+                                "current_time": job.current_time,
+                                "duration": job.duration,
+                                "ffmpeg_logs": job.ffmpeg_logs[-30:]
+                                if job.ffmpeg_logs
+                                else [],  # Send last 30 log lines for efficiency
+                            }
+                        )
                 except ImportError:
                     pass  # Ignore if socket_events can't be imported
 
         # Get hardware acceleration settings from config
         hw_accel = config.hw_accel
-        hw_device = config.hw_device
 
         # Override force_software if hw_accel is set to none
         if hw_accel and hw_accel.lower() == "none":
@@ -401,9 +406,11 @@ def transcode(
                 output_file=output_path,
                 dry_run=True,
                 overwrite=True,
-                presets_data={"preset": preset}  # Wrap the preset in a dict as expected by effeffmpeg
+                presets_data={
+                    "preset": preset
+                },  # Wrap the preset in a dict as expected by effeffmpeg
             )
-            
+
             # Add the command to the logs right away
             cmd_str = " ".join(command)
             with job._lock:
@@ -414,17 +421,6 @@ def transcode(
             job.ffmpeg_command = cmd_str
             logger.debug(f"FFmpeg command: {cmd_str}")
 
-            # Create a wrapper for the progress callback to get process stdout/stderr too
-            def custom_progress_callback(status_text, progress_value):
-                # First, call the original callback
-                progress_callback(status_text, progress_value)
-                
-                # If this is a process object being returned from non-blocking transcode,
-                # store it for later access to stdout/stderr buffers
-                if isinstance(status_text, object) and hasattr(status_text, "stdout_buffer"):
-                    # Just a placeholder - we'll handle the process separately
-                    pass
-            
             # Now run the actual transcode non-blocking to use our progress callback
             process = effeff_transcode(
                 input_file=media_item.path,
@@ -434,7 +430,7 @@ def transcode(
                 progress_callback=progress_callback,
                 preset_name="preset",  # Use the preset name
                 presets_data={"preset": preset},  # Pass the preset data directly
-                quiet=False  # Ensure we get verbose output for better logs
+                quiet=False,  # Ensure we get verbose output for better logs
             )
 
             # Store the process ID for potential cancellation
@@ -459,51 +455,58 @@ def transcode(
                 if os.path.exists(output_path):
                     output_size = os.path.getsize(output_path)
                     job.update_output_size(format_file_size(output_size))
-                
+
                 # Read stdout and stderr buffers from the process and add to logs
                 if process.stdout_buffer or process.stderr_buffer:
                     new_logs = []
-                    
+
                     # Get stdout lines first (usually less important)
                     for line in process.stdout_buffer:
-                        if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                        if line.strip() and not any(
+                            line in existing for existing in job.ffmpeg_logs[-100:]
+                        ):
                             new_logs.append(f"STDOUT: {line}")
-                    
+
                     # Get stderr lines (usually more important for ffmpeg)
                     for line in process.stderr_buffer:
-                        if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                        if line.strip() and not any(
+                            line in existing for existing in job.ffmpeg_logs[-100:]
+                        ):
                             new_logs.append(f"STDERR: {line}")
-                    
+
                     # Add new logs to job logs
                     if new_logs:
                         with job._lock:
                             # Keep the size manageable
                             if len(job.ffmpeg_logs) + len(new_logs) > 1000:
                                 # Remove oldest logs to make room
-                                job.ffmpeg_logs = job.ffmpeg_logs[-(1000-len(new_logs)):]
+                                job.ffmpeg_logs = job.ffmpeg_logs[
+                                    -(1000 - len(new_logs)) :
+                                ]
                             job.ffmpeg_logs.extend(new_logs)
-                
+
                 # Use process.poll() instead of wait with timeout to check if it's still running
                 # This avoids the TimeoutExpired exception when using eventlet's patched subprocess
                 if process.process.poll() is not None:
                     # Process completed
                     process.finished = True
                     process.returncode = process.process.returncode
-                    
+
                     # Collect any final output
                     stderr = process.get_stderr()
-                    stdout = process.get_stdout()
-                    
+
                     # Add any remaining stderr output to logs
                     if stderr:
                         new_logs = []
                         for line in stderr.splitlines():
-                            if line.strip() and not any(line in existing for existing in job.ffmpeg_logs[-100:]):
+                            if line.strip() and not any(
+                                line in existing for existing in job.ffmpeg_logs[-100:]
+                            ):
                                 new_logs.append(f"STDERR: {line}")
                         if new_logs:
                             with job._lock:
                                 job.ffmpeg_logs.extend(new_logs)
-                    
+
                     break
 
                 # Sleep for a short time
@@ -516,7 +519,9 @@ def transcode(
             # Check if the process completed successfully
             if process.returncode != 0:
                 stderr = process.get_stderr()
-                logger.error(f"Transcode failed with code {process.returncode}: {stderr}")
+                logger.error(
+                    f"Transcode failed with code {process.returncode}: {stderr}"
+                )
                 raise RuntimeError(f"Transcode failed with code {process.returncode}")
 
             # Update job status
@@ -581,6 +586,7 @@ def transcode(
 
                 # Add show title to the metadata
                 from squishy.scanner import get_show
+
                 show = get_show(media_item.show_id)
                 if show:
                     metadata["show_title"] = show.title
@@ -626,9 +632,16 @@ def get_media_duration(input_path: str) -> Optional[float]:
     """Get the duration of a media file in seconds using effeffmpeg."""
     try:
         # Run ffprobe to get duration
-        ffprobe_cmd = ["ffprobe", "-v", "error", "-show_entries",
-                      "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
-                      input_path]
+        ffprobe_cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            input_path,
+        ]
 
         result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
 
@@ -665,37 +678,48 @@ def get_media_duration(input_path: str) -> Optional[float]:
 def apply_output_path_mapping(path: str) -> str:
     """
     Apply path mapping to output directory if needed.
-    
-    This handles cases where the config.transcode_path may need to be 
+
+    This handles cases where the config.transcode_path may need to be
     mapped to a different location (like in Docker environments).
     """
     config = load_config()
-    
+
     # Print detailed debug information
     logger.debug(f"apply_output_path_mapping: Input path: {path}")
     logger.debug(f"apply_output_path_mapping: Path mappings: {config.path_mappings}")
-    
+
     if not config.path_mappings:
-        logger.debug("apply_output_path_mapping: No path mappings defined, returning original path")
+        logger.debug(
+            "apply_output_path_mapping: No path mappings defined, returning original path"
+        )
         return path
-        
+
     # Check if the transcode path is directly in the path mappings
     for source_path, target_path in config.path_mappings.items():
         if path == source_path:
             logger.info(f"Mapping output path: {path} -> {target_path}")
             return target_path
-    
+
     # If path doesn't exist but a mapping target does, use that
     if not os.path.exists(path):
-        logger.debug(f"apply_output_path_mapping: Path {path} does not exist, checking for accessible alternatives")
+        logger.debug(
+            f"apply_output_path_mapping: Path {path} does not exist, checking for accessible alternatives"
+        )
         for source_path, target_path in config.path_mappings.items():
             # Check if the target path exists and matches our transcode path pattern
-            if os.path.exists(target_path) and (target_path.endswith('/transcodes') or target_path == '/transcodes'):
-                logger.info(f"Using accessible output path mapping: {path} -> {target_path}")
+            if os.path.exists(target_path) and (
+                target_path.endswith("/transcodes") or target_path == "/transcodes"
+            ):
+                logger.info(
+                    f"Using accessible output path mapping: {path} -> {target_path}"
+                )
                 return target_path
-    
-    logger.debug(f"apply_output_path_mapping: No mapping found, using original path: {path}")
+
+    logger.debug(
+        f"apply_output_path_mapping: No mapping found, using original path: {path}"
+    )
     return path
+
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size in a human-readable way."""
@@ -769,8 +793,8 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
         result["methods"].append(hwaccel)
 
     # Add detected encoders as methods
-    for codec, encoder in capabilities.get("encoders", {}).items():
-        method = encoder.split('_')[1] if '_' in encoder else encoder
+    for _, encoder in capabilities.get("encoders", {}).items():
+        method = encoder.split("_")[1] if "_" in encoder else encoder
         if method not in result["methods"]:
             result["methods"].append(method)
 
@@ -784,7 +808,9 @@ def detect_hw_accel(ffmpeg_path: str) -> Dict[str, Any]:
         result["recommended"]["method"] = hwaccel
         result["recommended"]["device"] = device
 
-    logger.info(f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}")
+    logger.info(
+        f"Hardware acceleration methods detected: {', '.join(result['methods']) or 'None'}"
+    )
     logger.info(f"Recommended method: {result['recommended']['method'] or 'None'}")
 
     return result
@@ -886,7 +912,9 @@ def remove_job(job_id: str) -> bool:
                 logger.info(f"Removed job {job_id} with status {job_status}")
                 return True
             else:
-                logger.warning(f"Failed to remove job {job_id}: Job not found in dictionary")
+                logger.warning(
+                    f"Failed to remove job {job_id}: Job not found in dictionary"
+                )
                 return False
     except Exception as e:
         logger.warning(f"Failed to remove job {job_id}: {str(e)}")

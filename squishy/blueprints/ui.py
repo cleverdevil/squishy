@@ -7,18 +7,33 @@ from flask import (
     request,
     redirect,
     url_for,
-    current_app,
     flash,
     send_file,
 )
 
 from squishy.config import load_config
-from squishy.scanner import get_all_media, get_media, get_shows_and_movies, get_show
-from squishy.transcoder import create_job, get_job, start_transcode, apply_output_path_mapping
+from squishy.scanner import get_media, get_show
+from squishy.transcoder import (
+    JOBS,
+    create_job,
+    start_transcode,
+    apply_output_path_mapping,
+    remove_job as remove_transcode_job,
+    cancel_job as cancel_transcode_job,
+)
 from squishy.completed import get_completed_transcodes, delete_transcode
-from squishy.media_info import get_media_info, format_file_size
 
 ui_bp = Blueprint("ui", __name__)
+
+
+# Helper function to format file size
+def format_file_size(bytes_size):
+    if bytes_size < 1024 * 1024:  # Less than 1 MB
+        return f"{round(bytes_size / 1024, 2)} KB"
+    elif bytes_size < 1024 * 1024 * 1024:  # Less than 1 GB
+        return f"{round(bytes_size / (1024 * 1024), 2)} MB"
+    else:  # GB or larger
+        return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
 
 
 @ui_bp.route("/")
@@ -68,7 +83,7 @@ def show_detail(show_id):
     valid_episode_ids = set()
 
     for season in show.seasons.values():
-        for episode_id, episode in season.episodes.items():
+        for episode in season.episodes.values():
             episode_count += 1
             # Verify each episode exists in MEDIA dictionary
             media_item = get_media(episode.id)
@@ -113,12 +128,7 @@ def transcode(media_id):
             return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
 
     job = create_job(media_item, preset_name)
-    start_transcode(
-        job,
-        media_item,
-        preset_name,
-        current_app.config["TRANSCODE_PATH"],
-    )
+    start_transcode(job, media_item, preset_name, config.transcode_path)
 
     flash(f"Transcoding job started with preset: {preset_name}")
 
@@ -132,21 +142,11 @@ def transcode(media_id):
 @ui_bp.route("/jobs")
 def jobs():
     """Display transcoding jobs grouped by status."""
-    from squishy.transcoder import JOBS
 
     # Get media items for each job to display title instead of ID
     active_jobs = []
     completed_jobs = []
     failed_jobs = []
-
-    # Helper function to format file size
-    def format_file_size(bytes_size):
-        if bytes_size < 1024 * 1024:  # Less than 1 MB
-            return f"{round(bytes_size / 1024, 2)} KB"
-        elif bytes_size < 1024 * 1024 * 1024:  # Less than 1 GB
-            return f"{round(bytes_size / (1024 * 1024), 2)} MB"
-        else:  # GB or larger
-            return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
 
     for job in JOBS.values():
         media_item = get_media(job.media_id)
@@ -236,7 +236,6 @@ def jobs():
 @ui_bp.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id):
     """Cancel a transcoding job."""
-    from squishy.transcoder import cancel_job as cancel_transcode_job
 
     success = cancel_transcode_job(job_id)
     if success:
@@ -250,7 +249,6 @@ def cancel_job(job_id):
 @ui_bp.route("/jobs/<job_id>/remove", methods=["POST"])
 def remove_job(job_id):
     """Remove a completed, failed, or cancelled job."""
-    from squishy.transcoder import remove_job as remove_transcode_job
 
     success = remove_transcode_job(job_id)
     if success:
@@ -266,18 +264,7 @@ def completed():
     """Display completed transcodes."""
     # Load config to get transcode path
     config = load_config()
-    completed_transcodes = get_completed_transcodes(
-        config.transcode_path
-    )
-
-    # Helper function to format file size
-    def format_file_size(bytes_size):
-        if bytes_size < 1024 * 1024:  # Less than 1 MB
-            return f"{round(bytes_size / 1024, 2)} KB"
-        elif bytes_size < 1024 * 1024 * 1024:  # Less than 1 GB
-            return f"{round(bytes_size / (1024 * 1024), 2)} MB"
-        else:  # GB or larger
-            return f"{round(bytes_size / (1024 * 1024 * 1024), 2)} GB"
+    completed_transcodes = get_completed_transcodes(config.transcode_path)
 
     # Add original file size and compression details
     for transcode in completed_transcodes:
@@ -310,10 +297,10 @@ def download_file(filename):
     # Load config to get transcode path
     config = load_config()
     transcode_path = config.transcode_path
-    
+
     # Apply path mappings to transcode_path
     transcode_path = apply_output_path_mapping(transcode_path)
-    
+
     file_path = os.path.join(transcode_path, filename)
 
     # Verify the file exists and is within transcode_path
@@ -339,17 +326,21 @@ def download_episode(media_id):
     if media_item is None:
         flash("Media not found")
         return redirect(url_for("ui.index"))
-    
+
     # Verify the episode file exists
-    if not media_item.path or not os.path.exists(media_item.path) or not os.path.isfile(media_item.path):
+    if (
+        not media_item.path
+        or not os.path.exists(media_item.path)
+        or not os.path.isfile(media_item.path)
+    ):
         flash("Episode file not found")
         if media_item.show_id:
             return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
         return redirect(url_for("ui.index"))
-    
+
     # Extract filename from path for attachment name
     filename = os.path.basename(media_item.path)
-    
+
     # Set download flag to trigger "Save As" dialog
     return send_file(media_item.path, as_attachment=True, download_name=filename)
 
