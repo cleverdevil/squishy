@@ -138,6 +138,7 @@ class TranscodeJob:
     output_size: Optional[str] = None
     duration: Optional[float] = None
     current_time: Optional[float] = None
+    output_dir: Optional[str] = None  # Output directory (None = use config default)
     process_id: Optional[int] = None  # Store process ID for cancellation
     ffmpeg_command: Optional[str] = None  # Store the FFmpeg command for reference
     ffmpeg_logs: List[str] = field(default_factory=list)  # Store FFmpeg logs

@@ -783,7 +783,8 @@ def generate_ffmpeg_command(
     flac_compression: Optional[int] = None,
     overwrite: bool = False,
     quiet: bool = False,
-    progress: bool = False
+    progress: bool = False,
+    subtitle_mode: Optional[str] = None
 ) -> List[str]:
     """
     Generate an FFmpeg command for transcoding video with hardware acceleration awareness.
@@ -806,6 +807,7 @@ def generate_ffmpeg_command(
         flac_compression: FLAC compression level (0-8)
         overwrite: Add -y flag to force overwriting output file
         quiet: Suppress informational output
+        subtitle_mode: Subtitle handling mode ("keep" to copy all subtitle streams, "drop" to exclude them)
 
     Returns:
         A list of strings forming the FFmpeg command
@@ -916,7 +918,11 @@ def generate_ffmpeg_command(
             command += ["-b:a", audio_bitrate]
         if audio_codec == "flac" and flac_compression is not None:
             command += ["-compression_level", str(flac_compression)]
-    
+
+    # Handle subtitle streams
+    if subtitle_mode == "keep":
+        command += ["-c:s", "copy"]
+
     # Add progress reporting option if requested
     # FFmpeg can output machine-readable progress information
     if progress:
@@ -948,7 +954,8 @@ def transcode(
     progress_callback: Optional[Callable[[str, Optional[float]], None]] = None,
     preset_name: Optional[str] = None,
     presets_data: Optional[Dict[str, Dict[str, Any]]] = None,
-    presets_file: Optional[str] = None
+    presets_file: Optional[str] = None,
+    subtitle_mode: Optional[str] = None
 ) -> Union[List[str], subprocess.CompletedProcess, TranscodeProcess]:
     """
     Transcode a video file using FFmpeg with optimal hardware acceleration settings.
@@ -1038,6 +1045,7 @@ def transcode(
     flac_compression_val = flac_compression if flac_compression is not None else preset_config.get('flac_compression')
     allow_fallback_val = allow_fallback or preset_config.get('allow_fallback', False)
     force_software_val = force_software or preset_config.get('force_software', False)
+    subtitle_mode_val = subtitle_mode or preset_config.get('subtitle_mode')
 
     # Get hardware capabilities
     capabilities = None
@@ -1071,7 +1079,8 @@ def transcode(
         flac_compression=flac_compression_val,
         overwrite=overwrite,
         quiet=quiet,
-        progress=(non_blocking or progress_callback is not None)  # Enable progress reporting if we need it
+        progress=(non_blocking or progress_callback is not None),  # Enable progress reporting if we need it
+        subtitle_mode=subtitle_mode_val
     )
 
     # Return the command if dry_run is True

@@ -113,6 +113,7 @@ def show_detail(show_id):
 def transcode(media_id):
     """Start a transcoding job."""
     preset_name = request.form["preset_name"]
+    output_mode = request.form.get("output_mode", "default")
 
     media_item = get_media(media_id)
     if media_item is None:
@@ -127,8 +128,14 @@ def transcode(media_id):
         else:  # episode
             return redirect(url_for("ui.show_detail", show_id=media_item.show_id))
 
+    if output_mode == "in_place":
+        output_dir = os.path.dirname(media_item.path)
+    else:
+        output_dir = config.transcode_path
+
     job = create_job(media_item, preset_name)
-    start_transcode(job, media_item, preset_name, config.transcode_path)
+    job.output_dir = output_dir
+    start_transcode(job, media_item, preset_name, output_dir)
 
     flash(f"Transcoding job started with preset: {preset_name}")
 

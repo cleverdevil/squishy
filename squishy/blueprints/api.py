@@ -1,5 +1,6 @@
 """API blueprint for Squishy."""
 
+import os
 import traceback
 
 from flask import Blueprint, jsonify, request
@@ -143,6 +144,7 @@ def transcode():
 
     media_id = data["media_id"]
     preset_name = data["preset"]
+    output_mode = data.get("output_mode", "default")
 
     media_item = get_media(media_id)
     if media_item is None:
@@ -152,15 +154,19 @@ def transcode():
     if preset_name not in config.presets:
         return jsonify({"error": "Invalid preset"}), 400
 
-    job = create_job(media_item, preset_name)
+    if output_mode == "in_place":
+        output_dir = os.path.dirname(media_item.path)
+    else:
+        output_dir = config.transcode_path
 
-    # Use the transcode_path from the config object directly
-    # instead of relying on Flask's app.config
+    job = create_job(media_item, preset_name)
+    job.output_dir = output_dir
+
     start_transcode(
         job,
         media_item,
         preset_name,
-        config.transcode_path,
+        output_dir,
     )
 
     return jsonify(

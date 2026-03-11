@@ -163,7 +163,7 @@ def process_job_queue():
                 )
                 continue
 
-            output_dir = config.transcode_path
+            output_dir = job.output_dir or config.transcode_path
 
             # Start the job
             _start_transcode_job(job, media_item, preset_name, output_dir)
@@ -296,10 +296,10 @@ def transcode(
         job.update_status("processing")
         logger.debug(f"Job {job.id} status changed to processing")
 
-        # Always use the configured transcode_path from config
         config = load_config()
-        output_dir = config.transcode_path
-        logger.info(f"Using configured transcode_path: {output_dir}")
+        if not output_dir:
+            output_dir = config.transcode_path
+        logger.info(f"Using output directory: {output_dir}")
 
         # Get the preset from config
         if preset_name not in config.presets:
@@ -396,6 +396,10 @@ def transcode(
         if hw_accel and hw_accel.lower() == "none":
             preset["force_software"] = True
 
+        # Strip audio_bitrate when audio_codec is "copy" (bitrate is not applicable)
+        if preset.get("audio_codec") == "copy":
+            preset.pop("audio_bitrate", None)
+
         # Run the effeffmpeg transcoding
         logger.info(f"Starting transcode for job {job.id} using effeffmpeg")
 
@@ -406,9 +410,8 @@ def transcode(
                 output_file=output_path,
                 dry_run=True,
                 overwrite=True,
-                presets_data={
-                    "preset": preset
-                },  # Wrap the preset in a dict as expected by effeffmpeg
+                preset_name="preset",
+                presets_data={"preset": preset},
             )
 
             # Add the command to the logs right away
@@ -492,6 +495,12 @@ def transcode(
                     process.finished = True
                     process.returncode = process.process.returncode
 
+                    # Wait for reader threads to finish consuming output
+                    if hasattr(process, 'stdout_thread'):
+                        process.stdout_thread.join(timeout=5)
+                    if hasattr(process, 'stderr_thread'):
+                        process.stderr_thread.join(timeout=5)
+
                     # Collect any final output
                     stderr = process.get_stderr()
 
@@ -522,7 +531,13 @@ def transcode(
                 logger.error(
                     f"Transcode failed with code {process.returncode}: {stderr}"
                 )
-                raise RuntimeError(f"Transcode failed with code {process.returncode}")
+                # Add stderr to job logs before raising
+                if stderr:
+                    with job._lock:
+                        for line in stderr.splitlines():
+                            if line.strip():
+                                job.ffmpeg_logs.append(f"STDERR: {line}")
+                raise RuntimeError(f"Transcode failed with code {process.returncode}: {stderr}")
 
             # Update job status
             job.update_status("completed")
@@ -607,9 +622,10 @@ def transcode(
         # Update job status with thread safety
         job.update_status("failed")
 
-        # Update error message with thread safety
+        # Update error message and add to logs for UI visibility
         with job._lock:
             job.error_message = str(e)
+            job.ffmpeg_logs.append(f"ERROR: {str(e)}")
 
         # Make sure to capture final error messages in logs
         if hasattr(e, "stderr") and e.stderr:
