@@ -7,13 +7,15 @@ import logging
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 
-from squishy.transcoder import apply_output_path_mapping
+from squishy.transcoder import apply_output_path_mapping, build_streams_comparison
+
+logger = logging.getLogger(__name__)
 
 def get_completed_transcodes(transcode_path: str) -> List[Dict[str, Any]]:
     """Get all completed transcodes with metadata."""
     # Apply path mappings to transcode_path
     transcode_path = apply_output_path_mapping(transcode_path)
-    
+
     # Find all JSON sidecar files
     sidecar_files = glob.glob(os.path.join(transcode_path, "*.json"))
 
@@ -33,6 +35,33 @@ def get_completed_transcodes(transcode_path: str) -> List[Dict[str, Any]]:
             metadata["file_path"] = media_path
             metadata["file_name"] = os.path.basename(media_path)
             metadata["sidecar_path"] = sidecar_path
+
+            # Retrocompat: build streams_comparison if missing
+            if "streams_comparison" not in metadata:
+                original_path = metadata.get("original_path", "")
+                logger.debug(f"Retrocompat streams_comparison: original_path={original_path}, media_path={media_path}")
+                if not original_path:
+                    logger.debug(f"Skipping streams_comparison: no original_path in sidecar {sidecar_path}")
+                elif not os.path.exists(original_path):
+                    logger.warning(f"Skipping streams_comparison: original_path does not exist: {original_path}")
+                elif not os.path.exists(media_path):
+                    logger.warning(f"Skipping streams_comparison: media_path does not exist: {media_path}")
+                else:
+                    try:
+                        streams_comp = build_streams_comparison(original_path, media_path)
+                        if streams_comp:
+                            metadata["streams_comparison"] = streams_comp
+                            # Persist back to sidecar on disk
+                            with open(sidecar_path, "r") as f:
+                                sidecar_data = json.load(f)
+                            sidecar_data["streams_comparison"] = streams_comp
+                            with open(sidecar_path, "w") as f:
+                                json.dump(sidecar_data, f, indent=2)
+                            logger.info(f"Retrocompat: updated sidecar with streams_comparison for {media_path}")
+                        else:
+                            logger.warning(f"build_streams_comparison returned None for source={original_path}, output={media_path}")
+                    except Exception:
+                        logger.exception(f"Could not build streams comparison for {media_path}")
 
             # Parse completed_at date for sorting
             if "completed_at" in metadata:

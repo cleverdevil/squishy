@@ -206,29 +206,38 @@ function updateJobElement(job) {
     if (openLogStates.has(job.id) && job.ffmpeg_logs && job.ffmpeg_logs.length > 0) {
         const logsContentEl = document.getElementById(`logs-content-${job.id}`);
         if (logsContentEl) {
-            // Check if we should auto-scroll based on whether user is already at bottom
             const wasAtBottom = isScrolledToBottom(logsContentEl);
-            
-            // Get current logs
-            let currentLogs = logsContentEl.textContent || '';
-            if (!currentLogs.includes(job.ffmpeg_logs[job.ffmpeg_logs.length - 1])) {
-                // Append new logs if they're not already there
-                job.ffmpeg_logs.forEach(logLine => {
-                    if (!currentLogs.includes(logLine)) {
-                        currentLogs += (currentLogs ? '\n' : '') + logLine;
-                    }
-                });
-                
-                // Update logs content
-                logsContentEl.textContent = currentLogs;
-                
-                // Auto-scroll if we were already at bottom
+
+            // Get current lines (clear "Loading..." placeholder)
+            let lines = logsContentEl.textContent || '';
+            if (lines === 'Loading...' || lines === 'No logs available') {
+                lines = '';
+            }
+            let lineArray = lines ? lines.split('\n') : [];
+
+            // Use a Set of the last N lines for efficient dedup
+            const recentSet = new Set(lineArray.slice(-100));
+            let hasNew = false;
+            for (const logLine of job.ffmpeg_logs) {
+                if (!recentSet.has(logLine)) {
+                    lineArray.push(logLine);
+                    recentSet.add(logLine);
+                    hasNew = true;
+                }
+            }
+
+            // Cap at 500 lines to prevent memory growth
+            if (lineArray.length > 500) {
+                lineArray = lineArray.slice(-500);
+            }
+
+            if (hasNew) {
+                logsContentEl.textContent = lineArray.join('\n');
                 if (wasAtBottom) {
                     setTimeout(() => scrollToBottom(logsContentEl), 10);
                 }
             }
         } else {
-            // If we can't find the logs content element but logs are open, do a full refresh
             loadJobLogs(job.id);
         }
     } else if (openLogStates.has(job.id) && (!job.ffmpeg_logs || job.ffmpeg_logs.length === 0)) {
@@ -244,14 +253,21 @@ function loadJobLogs(jobId) {
     const wasAtBottom = isScrolledToBottom(logsEl);
 
     fetch(`/api/jobs/${jobId}/logs`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
         .then(data => {
             // Update command
             const commandEl = document.getElementById(`command-${jobId}`);
-            commandEl.textContent = data.ffmpeg_command || 'Command not available';
+            if (commandEl) {
+                commandEl.textContent = data.ffmpeg_command || 'Command not available';
+            }
 
             // Update logs
-            logsEl.textContent = data.ffmpeg_logs.join('\n') || 'No logs available';
+            if (logsEl && data.ffmpeg_logs) {
+                logsEl.textContent = data.ffmpeg_logs.join('\n') || 'No logs available';
+            }
 
             // Auto-scroll to bottom if auto-refresh is enabled or user was already at bottom
             if (shouldAutoScroll || wasAtBottom) {
@@ -260,6 +276,9 @@ function loadJobLogs(jobId) {
         })
         .catch(error => {
             console.error('Error fetching logs:', error);
+            if (logsEl && logsEl.textContent === 'Loading...') {
+                logsEl.textContent = 'Could not load logs';
+            }
         });
 }
 

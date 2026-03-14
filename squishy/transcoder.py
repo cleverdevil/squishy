@@ -15,6 +15,7 @@ from typing import Dict, Optional, List, Callable, Any
 from squishy.config import load_config
 from squishy.models import TranscodeJob, MediaItem, Episode
 from squishy.scanner import get_media
+from squishy.media_info import get_media_info, format_file_size as mi_format_file_size
 from squishy.effeffmpeg.effeffmpeg import (
     transcode as effeff_transcode,
     detect_capabilities,
@@ -22,6 +23,124 @@ from squishy.effeffmpeg.effeffmpeg import (
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+def _format_channels(channels, channel_layout):
+    """Format audio channels into a human-readable string."""
+    if channel_layout:
+        return channel_layout
+    mapping = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}
+    return mapping.get(channels, f"{channels}ch")
+
+
+def _format_bitrate(bit_rate):
+    """Format bitrate into a human-readable string."""
+    if not bit_rate:
+        return ""
+    try:
+        bps = int(bit_rate)
+    except (ValueError, TypeError):
+        return str(bit_rate)
+    if bps >= 1_000_000:
+        return f"{bps / 1_000_000:.1f} Mbps"
+    elif bps >= 1000:
+        return f"{bps / 1000:.0f} kbps"
+    return f"{bps} bps"
+
+
+def build_streams_comparison(source_path, output_path):
+    """Build a streams comparison dict from source and output media files."""
+    source_info = get_media_info(source_path)
+    output_info = get_media_info(output_path)
+
+    if "error" in source_info or "error" in output_info:
+        if "error" in source_info:
+            logger.warning(f"Could not get media info for source '{source_path}': {source_info['error']}")
+        if "error" in output_info:
+            logger.warning(f"Could not get media info for output '{output_path}': {output_info['error']}")
+        return None
+
+    comparison = {}
+
+    # Video
+    src_video = source_info.get("video", [])
+    out_video = output_info.get("video", [])
+    if src_video or out_video:
+        sv = src_video[0] if src_video else {}
+        ov = out_video[0] if out_video else {}
+        comparison["video"] = {
+            "source": {
+                "codec": sv.get("codec", ""),
+                "resolution": f"{sv.get('width', '')}x{sv.get('height', '')}" if sv.get("width") else "",
+                "bitrate": _format_bitrate(source_info.get("format", {}).get("bit_rate", "")),
+                "frame_rate": sv.get("frame_rate", 0),
+                "bit_depth": sv.get("bit_depth", ""),
+            },
+            "output": {
+                "codec": ov.get("codec", ""),
+                "resolution": f"{ov.get('width', '')}x{ov.get('height', '')}" if ov.get("width") else "",
+                "bitrate": _format_bitrate(output_info.get("format", {}).get("bit_rate", "")),
+                "frame_rate": ov.get("frame_rate", 0),
+                "bit_depth": ov.get("bit_depth", ""),
+            },
+        }
+
+    # Audio
+    src_audio = source_info.get("audio", [])
+    out_audio = output_info.get("audio", [])
+    comparison["audio"] = {
+        "source": [
+            {
+                "codec": a.get("codec", ""),
+                "channels": _format_channels(a.get("channels", 0), a.get("channel_layout", "")),
+                "language": a.get("language", ""),
+                "bitrate": _format_bitrate(a.get("bit_rate", "")),
+            }
+            for a in src_audio
+        ],
+        "output": [
+            {
+                "codec": a.get("codec", ""),
+                "channels": _format_channels(a.get("channels", 0), a.get("channel_layout", "")),
+                "language": a.get("language", ""),
+                "bitrate": _format_bitrate(a.get("bit_rate", "")),
+            }
+            for a in out_audio
+        ],
+    }
+
+    # Subtitle
+    src_sub = source_info.get("subtitle", [])
+    out_sub = output_info.get("subtitle", [])
+    comparison["subtitle"] = {
+        "source": [
+            {"codec": s.get("codec", ""), "language": s.get("language", "")}
+            for s in src_sub
+        ],
+        "output": [
+            {"codec": s.get("codec", ""), "language": s.get("language", "")}
+            for s in out_sub
+        ],
+    }
+
+    # Format (file-level info)
+    src_fmt = source_info.get("format", {})
+    out_fmt = output_info.get("format", {})
+    comparison["format"] = {
+        "source": {
+            "size": mi_format_file_size(src_fmt.get("size", 0)),
+            "bitrate": _format_bitrate(src_fmt.get("bit_rate", "")),
+            "duration": src_fmt.get("duration", 0),
+        },
+        "output": {
+            "size": mi_format_file_size(out_fmt.get("size", 0)),
+            "bitrate": _format_bitrate(out_fmt.get("bit_rate", "")),
+            "duration": out_fmt.get("duration", 0),
+        },
+    }
+
+    return comparison
+
 
 # In-memory job store
 JOBS: Dict[str, TranscodeJob] = {}
@@ -400,6 +519,17 @@ def transcode(
         if preset.get("audio_codec") == "copy":
             preset.pop("audio_bitrate", None)
 
+        # Get source resolution to prevent upscaling
+        source_height = None
+        try:
+            media_info = get_media_info(media_item.path)
+            if media_info.get("video"):
+                source_height = media_info["video"][0].get("height")
+                if source_height:
+                    logger.info(f"Source video height: {source_height}p")
+        except Exception as e:
+            logger.warning(f"Could not determine source resolution: {e}")
+
         # Run the effeffmpeg transcoding
         logger.info(f"Starting transcode for job {job.id} using effeffmpeg")
 
@@ -412,6 +542,7 @@ def transcode(
                 overwrite=True,
                 preset_name="preset",
                 presets_data={"preset": preset},
+                source_height=source_height,
             )
 
             # Add the command to the logs right away
@@ -434,6 +565,7 @@ def transcode(
                 preset_name="preset",  # Use the preset name
                 presets_data={"preset": preset},  # Pass the preset data directly
                 quiet=False,  # Ensure we get verbose output for better logs
+                source_height=source_height,
             )
 
             # Store the process ID for potential cancellation
@@ -605,6 +737,14 @@ def transcode(
                 show = get_show(media_item.show_id)
                 if show:
                     metadata["show_title"] = show.title
+
+            # Build streams comparison between source and output
+            try:
+                streams_comp = build_streams_comparison(media_item.path, output_path)
+                if streams_comp:
+                    metadata["streams_comparison"] = streams_comp
+            except Exception as e:
+                logger.warning(f"Could not build streams comparison: {e}")
 
             # Write metadata to sidecar file
             with open(sidecar_path, "w") as f:

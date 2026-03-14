@@ -1,13 +1,15 @@
 """API blueprint for Squishy."""
 
 import os
+import json
+import shutil
 import traceback
 
 from flask import Blueprint, jsonify, request
 
 from squishy.config import load_config
 from squishy.scanner import get_all_media, get_media, get_scan_status
-from squishy.transcoder import create_job, get_job, start_transcode
+from squishy.transcoder import create_job, get_job, start_transcode, apply_output_path_mapping
 from squishy.media_info import get_media_info, format_file_size
 
 api_bp = Blueprint("api", __name__)
@@ -430,3 +432,67 @@ def list_files():
         return jsonify({"success": False, "message": "Permission denied"}), 403
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+@api_bp.route("/transcode/replace", methods=["POST"])
+def replace_original():
+    """Replace the original file with the transcoded version."""
+    data = request.json
+    if not data or "filename" not in data:
+        return jsonify({"success": False, "message": "Missing filename"}), 400
+
+    filename = data["filename"]
+    config = load_config()
+    transcode_path = apply_output_path_mapping(config.transcode_path)
+
+    file_path = os.path.join(transcode_path, filename)
+    sidecar_path = file_path + ".json"
+
+    # Security check - file must be within transcode directory
+    real_transcode_path = os.path.realpath(transcode_path)
+    real_file_path = os.path.realpath(file_path)
+    if not real_file_path.startswith(real_transcode_path):
+        return jsonify({"success": False, "message": "Security error: invalid file path"}), 403
+
+    # Check transcoded file exists
+    if not os.path.exists(file_path):
+        return jsonify({"success": False, "message": "Transcoded file not found"}), 404
+
+    # Read sidecar to get original_path
+    if not os.path.exists(sidecar_path):
+        return jsonify({"success": False, "message": "Metadata file not found"}), 404
+
+    try:
+        with open(sidecar_path, "r") as f:
+            metadata = json.load(f)
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error reading metadata: {str(e)}"}), 500
+
+    original_path = metadata.get("original_path")
+    if not original_path:
+        return jsonify({"success": False, "message": "Original path not found in metadata"}), 400
+
+    # Check original directory exists (file itself may have been moved)
+    original_dir = os.path.dirname(original_path)
+    if not os.path.isdir(original_dir):
+        return jsonify({"success": False, "message": f"Original directory does not exist: {original_dir}"}), 404
+
+    try:
+        # Remove the original file first to avoid permission issues
+        # when overwriting on network/NAS filesystems.
+        if os.path.exists(original_path):
+            os.remove(original_path)
+        try:
+            shutil.move(file_path, original_path)
+        except OSError:
+            # Cross-filesystem move may fail with EPERM when shutil.copy2
+            # tries to preserve extended attributes (common on Synology/NAS).
+            # Fall back to a simple copy without metadata preservation.
+            shutil.copy(file_path, original_path)
+            os.remove(file_path)
+        # Remove the sidecar JSON
+        if os.path.exists(sidecar_path):
+            os.remove(sidecar_path)
+        return jsonify({"success": True, "message": "Original file replaced successfully"})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error replacing file: {str(e)}"}), 500

@@ -784,7 +784,8 @@ def generate_ffmpeg_command(
     overwrite: bool = False,
     quiet: bool = False,
     progress: bool = False,
-    subtitle_mode: Optional[str] = None
+    subtitle_mode: Optional[str] = None,
+    source_height: Optional[int] = None
 ) -> List[str]:
     """
     Generate an FFmpeg command for transcoding video with hardware acceleration awareness.
@@ -808,6 +809,9 @@ def generate_ffmpeg_command(
         overwrite: Add -y flag to force overwriting output file
         quiet: Suppress informational output
         subtitle_mode: Subtitle handling mode ("keep" to copy all subtitle streams, "drop" to exclude them)
+        source_height: Height of the source video in pixels. When provided, the scale will be
+            capped to avoid upscaling (FFmpeg cannot upscale). If the target resolution is higher
+            than the source, scaling is skipped entirely.
 
     Returns:
         A list of strings forming the FFmpeg command
@@ -865,6 +869,14 @@ def generate_ffmpeg_command(
     if using_hardware and crf is not None and not quiet:
         print("[!] CRF is only allowed with software encoding. CRF will be ignored when hardware encoding is used.")
 
+    # Cap target resolution to source resolution to prevent upscaling
+    if scale and source_height is not None:
+        _, target_height = parse_resolution(scale)
+        if source_height <= target_height:
+            if not quiet:
+                print(f"[!] Source height ({source_height}p) <= target ({scale}). Skipping scaling to avoid upscaling.")
+            scale = None
+
     filters = []
     command = ["ffmpeg"]
 
@@ -904,6 +916,12 @@ def generate_ffmpeg_command(
         else:
             command += ["-crf", "28"]
 
+    # Map all streams explicitly (FFmpeg default only picks one per type)
+    command += ["-map", "0:v"]   # All video streams
+    command += ["-map", "0:a"]   # All audio streams
+    if subtitle_mode == "keep":
+        command += ["-map", "0:s?"]  # All subtitle streams (? = ignore if none)
+
     if audio_codec == "copy":
         command += ["-c:a", "copy"]
     else:
@@ -919,7 +937,7 @@ def generate_ffmpeg_command(
         if audio_codec == "flac" and flac_compression is not None:
             command += ["-compression_level", str(flac_compression)]
 
-    # Handle subtitle streams
+    # Handle subtitle codec
     if subtitle_mode == "keep":
         command += ["-c:s", "copy"]
 
@@ -955,7 +973,8 @@ def transcode(
     preset_name: Optional[str] = None,
     presets_data: Optional[Dict[str, Dict[str, Any]]] = None,
     presets_file: Optional[str] = None,
-    subtitle_mode: Optional[str] = None
+    subtitle_mode: Optional[str] = None,
+    source_height: Optional[int] = None
 ) -> Union[List[str], subprocess.CompletedProcess, TranscodeProcess]:
     """
     Transcode a video file using FFmpeg with optimal hardware acceleration settings.
@@ -1080,7 +1099,8 @@ def transcode(
         overwrite=overwrite,
         quiet=quiet,
         progress=(non_blocking or progress_callback is not None),  # Enable progress reporting if we need it
-        subtitle_mode=subtitle_mode_val
+        subtitle_mode=subtitle_mode_val,
+        source_height=source_height
     )
 
     # Return the command if dry_run is True
